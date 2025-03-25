@@ -72,19 +72,22 @@ def crear_pizarron(trayectoria, nombre):
         for i in range(1, len(puntos_recentrados)):
             pt1 = puntos_recentrados[i - 1]
             pt2 = puntos_recentrados[i]
-            cv2.line(pizarron, pt1, pt2, (255, 0, 0), 2)
+            cv2.line(pizarron, pt1, pt2, (0, 0, 0), 2)
 
         for punto in puntos_recentrados:
             cv2.circle(pizarron, punto, 4, (0, 0, 255), -1)
 
+        pizarron = cv2.resize(pizarron, (600,600)) 
         cv2.imshow(nombre, pizarron)
         print(f"{nombre}: {len(puntos_recentrados)} puntos dibujados.")
     else:
         # Pizarrón vacío si no hubo trayectoria
         pizarron = 255 * np.ones((300, 300, 3), dtype=np.uint8)
-        cv2.putText(pizarron, "Sin datos", (80, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 128, 128), 2)
+        pizarron = cv2.resize(pizarron, (600,600)) 
+        # cv2.putText(pizarron, "Sin datos", (80, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 128, 128), 2)
         cv2.imshow(nombre, pizarron)
         print(f"{nombre}: sin trayectoria.")
+
 
 # Mostrar pizarrones
 crear_pizarron(trayectoria_derecha, "Pizarron derecha")
