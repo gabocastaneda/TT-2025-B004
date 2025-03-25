@@ -1,18 +1,24 @@
 import cv2
 import mediapipe as mp
+import numpy as np
 
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 
 cap = cv2.VideoCapture(0)
 
+trayectoria_derecha = []
+trayectoria_izquierda = []
+
 with mp_hands.Hands(
-    static_image_mode = False,
-    max_num_hands = 2) as hands:
+    static_image_mode=False,
+    max_num_hands=2,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5) as hands:
 
     while cap.isOpened():
         ret, frame = cap.read()
-        if ret is False:
+        if not ret:
             break
 
         height, width, _ = frame.shape
@@ -21,35 +27,68 @@ with mp_hands.Hands(
 
         results = hands.process(frame_rgb)
 
-        # HANDEDNESS
         if results.multi_hand_landmarks and results.multi_handedness:
             for idx, hand_landmark in enumerate(results.multi_hand_landmarks):
-                # Identificar la mano
                 hand_label = results.multi_handedness[idx].classification[0].label  # 'Left' o 'Right'
-    
-        if results.multi_hand_landmarks is not None:
 
-            # Guardar coordenadas
-            puntos_mano = []
-            for punto in hand_landmark.landmark:
-                x = int(punto.x * width)
-                y = int(punto.y * height)
-                z = punto.z
-                puntos_mano.append((x, y, z))
-                
-            # Imprimir coordenadas con etiqueta
-            print(f"Mano {hand_label}:")
-            for i, (x, y, z) in enumerate(puntos_mano):
-                print(f"  Punto {i}: x={x}, y={y}, z={z:.4f}")
-            
-            # Dibujo de las conexiones 
-            for hand_landmark in results.multi_hand_landmarks:
-                # print(hand_landmark)
-                mp_drawing.draw_landmarks(frame, hand_landmark, mp_hands.HAND_CONNECTIONS) 
+                puntos = [(int(p.x * width), int(p.y * height), p.z) for p in hand_landmark.landmark]
+
+                x_centro = int(sum(p[0] for p in puntos) / len(puntos))
+                y_centro = int(sum(p[1] for p in puntos) / len(puntos))
+                centro = (x_centro, y_centro)
+
+                if hand_label == "Right":
+                    trayectoria_derecha.append(centro)
+                elif hand_label == "Left":
+                    trayectoria_izquierda.append(centro)
+
+                mp_drawing.draw_landmarks(frame, hand_landmark, mp_hands.HAND_CONNECTIONS)
+                cv2.circle(frame, centro, 5, (0, 0, 255), -1)
+                cv2.putText(frame, f'Centro {hand_label}', (x_centro + 10, y_centro),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
         cv2.imshow("Capture", frame)
+
         if cv2.waitKey(1) & 0xFF == 27:
-            break;
+            break
 
 cap.release()
+cv2.destroyAllWindows()
+
+def crear_pizarron(trayectoria, nombre):
+    if trayectoria:
+        xs = [p[0] for p in trayectoria]
+        ys = [p[1] for p in trayectoria]
+
+        x_min, x_max = min(xs), max(xs)
+        y_min, y_max = min(ys), max(ys)
+
+        ancho = x_max - x_min + 20
+        alto = y_max - y_min + 20
+
+        pizarron = 255 * np.ones((alto, ancho, 3), dtype=np.uint8)
+        puntos_recentrados = [((x - x_min + 10), (y - y_min + 10)) for (x, y) in trayectoria]
+
+        for i in range(1, len(puntos_recentrados)):
+            pt1 = puntos_recentrados[i - 1]
+            pt2 = puntos_recentrados[i]
+            cv2.line(pizarron, pt1, pt2, (255, 0, 0), 2)
+
+        for punto in puntos_recentrados:
+            cv2.circle(pizarron, punto, 4, (0, 0, 255), -1)
+
+        cv2.imshow(nombre, pizarron)
+        print(f"{nombre}: {len(puntos_recentrados)} puntos dibujados.")
+    else:
+        # Pizarrón vacío si no hubo trayectoria
+        pizarron = 255 * np.ones((300, 300, 3), dtype=np.uint8)
+        cv2.putText(pizarron, "Sin datos", (80, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 128, 128), 2)
+        cv2.imshow(nombre, pizarron)
+        print(f"{nombre}: sin trayectoria.")
+
+# Mostrar pizarrones
+crear_pizarron(trayectoria_derecha, "Pizarron derecha")
+crear_pizarron(trayectoria_izquierda, "Pizarron izquierda")
+
+cv2.waitKey(0)
 cv2.destroyAllWindows()
