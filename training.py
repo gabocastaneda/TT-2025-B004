@@ -29,9 +29,9 @@ trayectoria_izquierda = []
 
 with mp_hands.Hands(
     static_image_mode=False,  # Para procesar video
-    max_num_hands=1,  # Detectar hasta 2 manos
+    max_num_hands=2,  # Detectar hasta 2 manos
     min_detection_confidence=0.8,
-    min_tracking_confidence=0.8) as hands:
+    min_tracking_confidence=0.5) as hands:
 
     while cap.isOpened():
         ret, frame = cap.read()
