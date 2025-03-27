@@ -48,6 +48,9 @@ with mp_hands.Hands(
 
         results = hands.process(frame_rgb)
 
+        # HANDEDNESS
+        print(results.multi_handedness)
+
         if results.multi_hand_landmarks and results.multi_handedness:
             for idx, hand_landmark in enumerate(results.multi_hand_landmarks):
                 hand_label = results.multi_handedness[idx].classification[0].label  # 'Left' o 'Right'
@@ -109,9 +112,21 @@ def crear_pizarron(trayectoria, nombre):
         cv2.imshow(nombre, pizarron)
         print(f"{nombre}: sin trayectoria.")
 
+    return pizarron
+
 # Mostrar los pizarrones de las trayectorias
-crear_pizarron(trayectoria_derecha, "Pizarron derecha")
-crear_pizarron(trayectoria_izquierda, "Pizarron izquierda")
+derecha = crear_pizarron(trayectoria_derecha, "Pizarron derecha")
+izquierda = crear_pizarron(trayectoria_izquierda, "Pizarron izquierda")
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
+
+print("Trayectoria mano derecha: ", trayectoria_derecha)
+print("Trayectoria mano izquierda: ", trayectoria_izquierda)
+
+def pizarron_arreglo(pizarron):
+    imagen_arreglo = np.asarray(pizarron)
+    return imagen_arreglo
+
+print(f'Pizarron derecha ({len(pizarron_arreglo(derecha))}): ', pizarron_arreglo(derecha))
+print(f'Pizarron izquierda ({len(pizarron_arreglo(izquierda))}): ', pizarron_arreglo(izquierda))
