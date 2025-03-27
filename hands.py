@@ -13,7 +13,7 @@ trayectoria_izquierda = []
 with mp_hands.Hands(
     static_image_mode=False,
     max_num_hands=2,
-    min_detection_confidence=0.5,
+    min_detection_confidence=0.80,
     min_tracking_confidence=0.5) as hands:
 
     while cap.isOpened():
@@ -74,8 +74,8 @@ def crear_pizarron(trayectoria, nombre):
             pt2 = puntos_recentrados[i]
             cv2.line(pizarron, pt1, pt2, (0, 0, 0), 2)
 
-        for punto in puntos_recentrados:
-            cv2.circle(pizarron, punto, 4, (0, 0, 255), -1)
+        #for punto in puntos_recentrados:
+          #  cv2.circle(pizarron, punto, 4, (0, 0, 255), -1)
 
         pizarron = cv2.resize(pizarron, (600,600)) 
         cv2.imshow(nombre, pizarron)

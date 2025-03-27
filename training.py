@@ -1,32 +1,50 @@
 import cv2
-import mediapipe as mediapipe
-
-import cv2
 import mediapipe as mp
 import numpy as np
 
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 
-cap = cv2.VideoCapture('')
+# Abre el video de entrada
+input_video = 'D:/TT/video_entrada.mp4'
+cap = cv2.VideoCapture(input_video)
+
+# Verificar si se abrió correctamente el video
+if not cap.isOpened():
+    print("Error al abrir el video.")
+    exit()
+
+# Obtener las propiedades del video (tamaño de los frames y tasa de fotogramas)
+frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fps = cap.get(cv2.CAP_PROP_FPS)
+
+# Inicializar el escritor de video para guardar el resultado
+output_video = 'D:/TT/video_salida.mp4'
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec para MP4
+out = cv2.VideoWriter(output_video, fourcc, fps, (frame_width, frame_height))
 
 trayectoria_derecha = []
 trayectoria_izquierda = []
 
 with mp_hands.Hands(
-    static_image_mode=False,
-    max_num_hands=2,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5) as hands:
+    static_image_mode=False,  # Para procesar video
+    max_num_hands=1,  # Detectar hasta 2 manos
+    min_detection_confidence=0.8,
+    min_tracking_confidence=0.8) as hands:
 
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
 
+        frame = cv2.resize(frame, (600, 600))
+
+        # Voltear el frame una vez para simular un efecto de espejo
+        frame = cv2.flip(frame, 1)  # Voltear horizontalmente una sola vez
+
         height, width, _ = frame.shape
-        frame = cv2.flip(frame, 1)
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convertir a RGB
 
         results = hands.process(frame_rgb)
 
@@ -50,14 +68,19 @@ with mp_hands.Hands(
                 cv2.putText(frame, f'Centro {hand_label}', (x_centro + 10, y_centro),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
+        # Escribir el frame procesado en el archivo de salida
+        out.write(frame)
+
         cv2.imshow("Capture", frame)
 
-        if cv2.waitKey(1) & 0xFF == 27:
+        if cv2.waitKey(1) & 0xFF == 27:  # Salir si presionas 'Esc'
             break
 
 cap.release()
+out.release()
 cv2.destroyAllWindows()
 
+# Función para crear el pizarrón de la trayectoria
 def crear_pizarron(trayectoria, nombre):
     if trayectoria:
         xs = [p[0] for p in trayectoria]
@@ -77,22 +100,16 @@ def crear_pizarron(trayectoria, nombre):
             pt2 = puntos_recentrados[i]
             cv2.line(pizarron, pt1, pt2, (0, 0, 0), 2)
 
-        for punto in puntos_recentrados:
-            cv2.circle(pizarron, punto, 4, (0, 0, 255), -1)
-
-        pizarron = cv2.resize(pizarron, (600,600)) 
+        pizarron = cv2.resize(pizarron, (600, 600)) 
         cv2.imshow(nombre, pizarron)
         print(f"{nombre}: {len(puntos_recentrados)} puntos dibujados.")
     else:
-        # Pizarrón vacío si no hubo trayectoria
         pizarron = 255 * np.ones((300, 300, 3), dtype=np.uint8)
-        pizarron = cv2.resize(pizarron, (600,600)) 
-        # cv2.putText(pizarron, "Sin datos", (80, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 128, 128), 2)
+        pizarron = cv2.resize(pizarron, (600, 600))
         cv2.imshow(nombre, pizarron)
         print(f"{nombre}: sin trayectoria.")
 
-
-# Mostrar pizarrones
+# Mostrar los pizarrones de las trayectorias
 crear_pizarron(trayectoria_derecha, "Pizarron derecha")
 crear_pizarron(trayectoria_izquierda, "Pizarron izquierda")
 
