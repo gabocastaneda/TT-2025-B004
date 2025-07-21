@@ -4,3 +4,10 @@ Este codigo fue implementado usando
 - Python v3.10.12
 - MediaPipe v0.10.21
 - OpenCV v4.11.0.86
+
+# --Librerias para pantallas--
+# Libreria de imagenes
+pip install pillow
+# Libereia de captura de camara
+pip install opencv-python pillow
+
