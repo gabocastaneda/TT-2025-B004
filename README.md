@@ -8,6 +8,10 @@ Este codigo fue implementado usando
 # --Librerias para pantallas--
 # Libreria de imagenes
 pip install pillow
-# Libereia de captura de camara
+# Libreria de captura de camara
 pip install opencv-python pillow
+# Libreria de diseño de marcos de camara y videos 1
+pip install ttkbootstrap
+# Libreria de diseño de marcos de camara y videos 2
+
 
