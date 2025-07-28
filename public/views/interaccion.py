@@ -3,6 +3,7 @@ from tkinter import Label
 from PIL import Image, ImageTk
 import cv2
 from pathlib import Path
+from tkinter import font as tkfont
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -11,7 +12,7 @@ root = ctk.CTk()
 root.title("Ventana de Interacción")
 
 base_dir = Path(__file__).parent if '__file__' in globals() else Path.cwd()
-image_path = base_dir.parent / 'images' / 'fondo.png'
+image_path = base_dir.parent / 'images' / 'fondo2.png'
 try:
     bg_image_original = Image.open(image_path)
 except Exception as e:
@@ -31,10 +32,21 @@ root.resizable(True, True)
 barra_superior = ctk.CTkFrame(root, fg_color="#1881d7", height=barra_alto, corner_radius=0)
 barra_superior.pack(fill='x')
 
-# Fondo: Label, referencia global, y fondo responsivo
+fuente_barra = tkfont.Font(family="Arial", size=20, weight="bold", slant="italic")
+# Etiqueta de texto centrada en la barra azul
+titulo_label = Label(
+    barra_superior,
+    text="TT 2025-B004",  # Puedes cambiar este texto
+    font=fuente_barra,
+    bg="#1881d7",
+    fg="white"
+)
+titulo_label.place(relx=0.5, rely=0.5, anchor="center")
+
+# Fondo
 fondo_label = Label(root)
 fondo_label.place(x=0, y=barra_alto)
-bg_photo = [None]  # Referencia persistente
+bg_photo = [None]
 
 def actualizar_fondo(event=None):
     w = root.winfo_width()
@@ -51,61 +63,60 @@ def actualizar_fondo(event=None):
 
 root.bind("<Configure>", actualizar_fondo)
 
-# ---- TUS ELEMENTOS ORIGINALES ----
+# Márgenes y separación
 margen_izq = int(screen_width * 0.05)
 margen_der = int(screen_width * 0.05)
 separacion = int(screen_width * 0.05)
 area_util_ancho = screen_width - margen_izq - margen_der
 
-# Cálculo dinámico del ancho como antes
-video_width = (area_util_ancho - separacion) // 2
+# Tamaño fijo para ambos recuadros
+recuadro_width = (area_util_ancho - separacion) // 2
+recuadro_height = int(recuadro_width * 0.75)
 
-# NUEVO: Altura máxima no mayor que (screen_height - margen_superior - margen_inferior), 
-# y EN NINGÚN CASO más alta que el espacio disponible arriba y abajo.
-espacio_vertical_disponible = screen_height - int(screen_height * 0.15) - int(screen_height * 0.15)  # margen superior y margen inferior
-
-video_height = min(int(video_width * 1.5), int(espacio_vertical_disponible*0.65))
-
-video_y = int(screen_height * 0.25) 
+video_y = int(screen_height * 0.25)
 video1_x = margen_izq
-video2_x = margen_izq + video_width + separacion
+video2_x = margen_izq + recuadro_width + separacion
 
-# Ambos recuadros del mismo tamaño y forma
+# Recuadro del video (cámara)
 recuadro_video1 = ctk.CTkFrame(
     root,
-    width=video_width*1.5,
-    height=video_height,
-    corner_radius=30,
-    border_width=6,
+    width=recuadro_width,
+    height=recuadro_height,
+    corner_radius=10,
+    border_width=10,
     border_color="#F3D05C",
     fg_color="white"
 )
-recuadro_video1.place(x=video1_x, y=video_y+20)
-video_label = Label(recuadro_video1, bg="white")
-video_label.pack(expand=True, fill="both")
+recuadro_video1.place(x=video1_x, y=video_y)
 
+video_label = Label(recuadro_video1, bg="white")
+video_label.place(relx=0.5, rely=0.5, anchor="center", width=recuadro_width - 20, height=recuadro_height - 20)
+
+# Segundo recuadro (estático o para otro contenido)
 recuadro_video2 = ctk.CTkFrame(
     root,
-    width=video_width*1.05,
-    height=video_height *1.3,
-    corner_radius=30,
-    border_width=6,
+    width=recuadro_width,
+    height=recuadro_height,
+    corner_radius=10,
+    border_width=10,
     border_color="#F3D05C",
     fg_color="white"
 )
 recuadro_video2.place(x=video2_x, y=video_y)
 
-
 recuadro_video1.lift()
 recuadro_video2.lift()
 
+# Captura de video
 cap = cv2.VideoCapture(0)
+
 def mostrar_frame():
     ret, frame = cap.read()
     if ret:
         frame = cv2.flip(frame, 1)
-        # Video exactamente del tamaño del recuadro
-        frame = cv2.resize(frame, (video_width+200, video_height+200))
+        label_w = recuadro_width - 20
+        label_h = recuadro_height - 20
+        frame = cv2.resize(frame, (label_w, label_h))
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         imagen = Image.fromarray(frame)
         imgtk = ImageTk.PhotoImage(imagen)
@@ -113,12 +124,11 @@ def mostrar_frame():
         video_label.configure(image=imgtk)
     root.after(10, mostrar_frame)
 
-
 mostrar_frame()
 
 def cerrar():
     cap.release()
     root.destroy()
-root.protocol("WM_DELETE_WINDOW", cerrar)
 
+root.protocol("WM_DELETE_WINDOW", cerrar)
 root.mainloop()

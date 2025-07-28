@@ -2,6 +2,7 @@ import customtkinter as ctk
 from tkinter import Label
 from PIL import Image, ImageTk
 from pathlib import Path
+from tkinter import font as tkfont
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
@@ -11,7 +12,7 @@ root.title("Ventana de Bienvenida")
 
 # ---- Calcular rutas absolutas ----
 base_dir = Path(__file__).parent if '__file__' in globals() else Path.cwd()
-image_path = base_dir.parent / "images" / "fondo.png"
+image_path = base_dir.parent / "images" / "fondo2.png"
 
 try:
     bg_image_original = Image.open(image_path)
@@ -29,6 +30,17 @@ root.resizable(True, True)
 barra_superior = ctk.CTkFrame(root, fg_color="#1881d7", height=barra_alto, corner_radius=0)
 barra_superior.pack(fill='x')
 
+fuente_barra = tkfont.Font(family="Arial", size=20, weight="bold", slant="italic")
+# Etiqueta de texto centrada en la barra azul
+titulo_label = Label(
+    barra_superior,
+    text="TT 2025-B004",  # Puedes cambiar este texto
+    font=fuente_barra,
+    bg="#1881d7",
+    fg="white"
+)
+titulo_label.place(relx=0.5, rely=0.5, anchor="center")
+
 # ---- Fondo (Label) ----
 fondo_label = Label(root)
 fondo_label.place(x=0, y=barra_alto)
@@ -43,8 +55,8 @@ recuadro_video = ctk.CTkFrame(
     root,
     width=video_width,
     height=video_height,
-    corner_radius=30,
-    border_width=6,
+    corner_radius=20,
+    border_width=10,
     border_color="#F3D05C",
     fg_color="white"
 )
