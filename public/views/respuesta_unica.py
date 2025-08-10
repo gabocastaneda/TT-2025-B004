@@ -4,13 +4,18 @@ from PIL import Image, ImageTk
 import cv2
 from pathlib import Path
 from tkinter import font as tkfont
+import tempfile
+import requests
+import os
 
+# ===== CONFIGURACIÓN GENERAL =====
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 
 root = ctk.CTk()
 root.title("Ventana de Interacción")
 
+# ===== IMAGEN DE FONDO =====
 base_dir = Path(__file__).parent if '__file__' in globals() else Path.cwd()
 image_path = base_dir.parent / 'images' / 'fondo2.png'
 try:
@@ -19,16 +24,16 @@ except Exception as e:
     print(f"Error cargando imagen de fondo: {e}")
     bg_image_original = None
 
+# ===== DIMENSIONES DE PANTALLA =====
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
 
 barra_alto = int(screen_height * 0.1)
-fondo_alto = screen_height - barra_alto
 
 root.geometry(f"{screen_width}x{screen_height}")
 root.resizable(True, True)
 
-# Barra superior azul
+# ===== BARRA SUPERIOR =====
 barra_superior = ctk.CTkFrame(root, fg_color="#1881d7", height=barra_alto, corner_radius=0)
 barra_superior.pack(fill='x')
 
@@ -42,6 +47,7 @@ titulo_label = Label(
 )
 titulo_label.place(relx=0.5, rely=0.5, anchor="center")
 
+# ===== FONDO =====
 fondo_label = Label(root)
 fondo_label.place(x=0, y=barra_alto)
 bg_photo = [None]
@@ -61,6 +67,7 @@ def actualizar_fondo(event=None):
 
 root.bind("<Configure>", actualizar_fondo)
 
+# ===== RECUADRO DE VIDEO =====
 margen_izq = int(screen_width * 0.05)
 margen_der = int(screen_width * 0.05)
 separacion = int(screen_width * 0.05)
@@ -70,7 +77,7 @@ recuadro_width = (area_util_ancho - separacion) // 2
 recuadro_height = int(recuadro_width * 0.75)
 
 video_y = int(screen_height * 0.25)
-video_x = (screen_width - recuadro_width) // 2  # Centrado horizontalmente
+video_x = (screen_width - recuadro_width) // 2
 
 recuadro_video = ctk.CTkFrame(
     root,
@@ -87,14 +94,37 @@ video_label = Label(recuadro_video, bg="white")
 video_label.place(relx=0.5, rely=0.5, anchor="center",
                   width=recuadro_width - 20, height=recuadro_height - 20)
 
-video_path = "https://www.googleapis.com/drive/v3/files/11E-HHfWT_sZhL6-WxTgEJcfGJQ_X3DyB?alt=media&key=AIzaSyAWW-xLcA9ZMiFZLUyHODYT9KMKTUf7RiU"
-cap = cv2.VideoCapture(video_path)
+# ===== DESCARGA TEMPORAL DESDE GOOGLE DRIVE =====
+video_id = "1sxUrGJ0GdZqfzbEIPayjY_0pCsdtLQIh"  # ID del video compartido
+api_key = "TU_API_KEY_AQUI"  # Reemplazar con tu API key de Google Cloud
+video_url = f"https://www.googleapis.com/drive/v3/files/{video_id}?alt=media&key={api_key}"
 
+temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+print(f"Descargando video temporal en: {temp_file.name}")
+
+with requests.get(video_url, stream=True) as r:
+    r.raise_for_status()
+    for chunk in r.iter_content(chunk_size=8192):
+        temp_file.write(chunk)
+temp_file.close()
+
+# ===== ABRIR VIDEO =====
+cap = cv2.VideoCapture(temp_file.name)
+
+# Detectar FPS reales
+fps = cap.get(cv2.CAP_PROP_FPS)
+delay = int(1000 / fps) if fps > 0 else 30
+print(f"FPS detectados: {fps}, delay usado: {delay} ms")
+
+# ===== FUNCIÓN DE REPRODUCCIÓN =====
 def mostrar_frame():
     ret, frame = cap.read()
     if not ret:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  
-        ret, frame = cap.read()
+        # Fin del video → liberar recursos, borrar archivo y cerrar
+        cap.release()
+        os.remove(temp_file.name)
+        root.destroy()
+        return
     if ret:
         frame = cv2.flip(frame, 1)
         label_w = recuadro_width - 20
@@ -106,13 +136,8 @@ def mostrar_frame():
         imgtk = ImageTk.PhotoImage(imagen)
         video_label.imgtk = imgtk
         video_label.configure(image=imgtk)
-    root.after(30, mostrar_frame) 
+    root.after(delay, mostrar_frame)
 
 mostrar_frame()
 
-def cerrar():
-    cap.release()
-    root.destroy()
-
-root.protocol("WM_DELETE_WINDOW", cerrar)
 root.mainloop()
