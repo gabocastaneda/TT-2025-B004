@@ -95,9 +95,9 @@ video_label.place(relx=0.5, rely=0.5, anchor="center",
                   width=recuadro_width - 20, height=recuadro_height - 20)
 
 # ===== DESCARGA TEMPORAL DESDE GOOGLE DRIVE =====
-video_id = "1sxUrGJ0GdZqfzbEIPayjY_0pCsdtLQIh"  # ID del video compartido
-api_key = "TU_API_KEY_AQUI"  # Reemplazar con tu API key de Google Cloud
-video_url = f"https://www.googleapis.com/drive/v3/files/{video_id}?alt=media&key={api_key}"
+video_id = "1097UWAt2zR63lXUJB0fTWyZoEAIIlKSc"  # ID del video compartido
+api_key = "AIzaSyAWW-xLcA9ZMiFZLUyHODYT9KMKTUf7RiU"  # Reemplazar con tu API key de Google Cloud
+video_url = f"https://www.googleapis.com/drive/v3/files/1097UWAt2zR63lXUJB0fTWyZoEAIIlKSc?alt=media&key=AIzaSyAWW-xLcA9ZMiFZLUyHODYT9KMKTUf7RiU"
 
 temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
 print(f"Descargando video temporal en: {temp_file.name}")
