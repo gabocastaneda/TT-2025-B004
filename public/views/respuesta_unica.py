@@ -1,3 +1,5 @@
+# ===== PRUEBA CLOUD / THINKER =====
+
 import customtkinter as ctk
 from tkinter import Label
 from PIL import Image, ImageTk

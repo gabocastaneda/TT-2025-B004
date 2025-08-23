@@ -26,6 +26,11 @@ Crea un proyecto nuevo o usa uno existente.
 # Creacion de credenciales ID OAuth
     Seleccion de tipo de aplicación y  nombre
     Descarga de JSON
+# Reproducir video con OpenCV + Pillow
+pip install opencv-python
+
+# VLC 
+pip install python-vlc
 
 
 
