@@ -81,10 +81,17 @@ def mostrar_imagen(ruta, label):
     except Exception as e:
         messagebox.showerror("Error mostrando imagen", str(e))
 
-
 def reproducir_video(ruta, label):
     """Reproduce un video dentro del recuadro y lo elimina después de terminar"""
     cap = cv2.VideoCapture(ruta)
+
+    # Obtener metadatos del video
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    duracion = total_frames / fps if fps > 0 else 0
+    ancho = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    alto = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    calidad = ancho * alto  # resolución total como "calidad"
 
     def mostrar_frame():
         ret, frame = cap.read()
@@ -98,6 +105,14 @@ def reproducir_video(ruta, label):
             label.after(30, mostrar_frame)
         else:
             cap.release()
+
+            # Mostrar info del video antes de borrar
+            print("\n=== Datos del Video ===")
+            print(f"⏱ Tiempo de reproducción: {duracion:.2f} segundos")
+            print(f"🎞 FPS: {fps:.2f}")
+            print(f"📐 Dimensiones: {ancho} x {alto}")
+            print(f"📊 Calidad (resolución total): {calidad} píxeles\n")
+
             # Esperar 2 segundos antes de borrar
             label.after(2000, lambda: borrar_archivo(ruta))
 
