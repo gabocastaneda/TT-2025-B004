@@ -32,5 +32,7 @@ pip install opencv-python
 # VLC 
 pip install python-vlc
 
+# PyQT
+pip install PyQt5
 
 
