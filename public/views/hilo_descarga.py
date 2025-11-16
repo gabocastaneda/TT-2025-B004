@@ -13,7 +13,7 @@ class HiloDescarga(QThread):
     def __init__(self, url_video):
         super().__init__()
         self.url_video = url_video
-        self.dir_guardado = Path(__file__).resolve().parent / 'videos' 
+        self.dir_guardado = Path(__file__).resolve().parents[1] / 'videos'  # .../public/videos  (bien)
 
     def _extraer_id_y_nombre(self):
         match = re.search(r'/d/([a-zA-Z0-9_-]+)', self.url_video)
