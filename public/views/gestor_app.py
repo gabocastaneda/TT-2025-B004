@@ -88,6 +88,49 @@ class HiloEntrada(QThread):
             if not s:
                 continue
 
+            # ✅ Solo 1/2/3 son comandos; cualquier otro número va como texto (ticket=1001, producto=2, encuesta=5)
+            try:
+                n = int(s)
+                if n in (1, 2, 3):
+                    self.senal_cmd.emit(n)
+                else:
+                    self.senal_txt.emit(s)
+                continue
+            except ValueError:
+                self.senal_txt.emit(s)
+
+    senal_cmd = pyqtSignal(int)
+    senal_txt = pyqtSignal(str)
+    senal_salir = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        self._ena = True
+        self._alive = True
+
+    def set_habilitado(self, on: bool):
+        self._ena = bool(on)
+
+    def detener(self):
+        self._alive = False
+
+    def run(self):
+        print("------------------------------------------------------------")
+        print("FLUJO POR CONSOLA (entrada bloqueada mientras haya video)")
+        print("Comandos: 1) Bienvenida  2) Interacción  3) Salir")
+        print("------------------------------------------------------------")
+        while self._alive:
+            if not self._ena:
+                self.msleep(50)
+                continue
+            try:
+                s = input("> ").strip()
+            except EOFError:
+                self.senal_salir.emit()
+                break
+            if not s:
+                continue
+
             # ✅ Solo 1/2/3 son comandos; cualquier otro número se trata como texto
             try:
                 n = int(s)
@@ -408,24 +451,7 @@ class GestorAplicacion:
             self._set_state(ST.MAIN)
 
     # ----- comandos 1/2/3 -----
-    def _on_cmd(self, n: int):
-    # Si el estado actual espera números, trata el comando como texto
-    if self.state in {ST.WAIT_TICKET, ST.WAIT_PRODUCT, ST.SURVEY}:
-        self._on_txt(str(n))
-        return
-
-    if self.playing:
-        print("⏳ Espera a que termine el video…")
-        return
-
-    if n == 1:
-        self.mostrar_bienvenida()
-    elif n == 2:
-        self.mostrar_interaccion_inicio()
-    elif n == 3:
-        QTimer.singleShot(100, self.app.quit)
-    else:
-        print("Comandos: 1, 2, 3")
+    
 
 
     # ----- arranques -----
