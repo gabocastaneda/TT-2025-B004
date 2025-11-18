@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# public/views/gestor_app.py
+# public/views/gestor_app.py - VERSIÓN CORREGIDA
 import sys, requests
 from pathlib import Path
 from typing import List, Optional
@@ -39,23 +39,66 @@ RESP_TEXTO = {
 
 # Estados
 class ST:
-    MAIN = "MAIN"                            # esperando: devolucion
-    DEV_MENU = "DEV_MENU"                    # RESP11 -> producto/ninguno
-    DEV_REASON = "DEV_REASON"                # RESP12 -> danado/defecto/equivocacion
-    ASK_TICKET_YN = "ASK_TICKET_YN"          # RESP9 -> si/no
-    WAIT_TICKET = "WAIT_TICKET"              # RESP10 -> número
+    MAIN = "MAIN"
+    DEV_MENU = "DEV_MENU"
+    DEV_REASON = "DEV_REASON"
+    ASK_TICKET_YN = "ASK_TICKET_YN"
+    WAIT_TICKET = "WAIT_TICKET"
     SHOW_TICKET = "SHOW_TICKET"
-    WAIT_PRODUCT = "WAIT_PRODUCT"            # captura número de producto
-    MORE_PRODUCT = "MORE_PRODUCT"            # RESP7 -> si/no
-    RESP3_NINGUNO = "RESP3_NINGUNO"          # RESP2->RESP3 -> si/no
-    RESP3_NO_TICKET = "RESP3_NO_TICKET"      # RESP6->RESP3 -> no
-    SURVEY = "SURVEY"                        # RESP5 -> 1..5
+    WAIT_PRODUCT = "WAIT_PRODUCT"
+    MORE_PRODUCT = "MORE_PRODUCT"
+    RESP3_NINGUNO = "RESP3_NINGUNO"
+    RESP3_NO_TICKET = "RESP3_NO_TICKET"
+    SURVEY = "SURVEY"
 
 def _norm(s: str) -> str: return s.strip().lower()
 def _yes(s: str) -> bool: return _norm(s) in {"si","sí","yes","y","s"}
 def _no(s: str)  -> bool: return _norm(s) in {"no","n"}
 
 class HiloEntrada(QThread):
+    senal_cmd = pyqtSignal(int)
+    senal_txt = pyqtSignal(str)
+    senal_salir = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        self._ena = True
+        self._alive = True
+
+    def set_habilitado(self, on: bool):
+        self._ena = bool(on)
+
+    def detener(self):
+        self._alive = False
+
+    def run(self):
+        print("------------------------------------------------------------")
+        print("FLUJO POR CONSOLA (entrada bloqueada mientras haya video)")
+        print("Comandos: 1) Bienvenida  2) Interacción  3) Salir")
+        print("------------------------------------------------------------")
+        while self._alive:
+            if not self._ena:
+                self.msleep(50)
+                continue
+            try:
+                s = input("> ").strip()
+            except EOFError:
+                self.senal_salir.emit()
+                break
+            if not s:
+                continue
+
+            # ✅ Solo 1/2/3 son comandos; cualquier otro número se trata como texto
+            try:
+                n = int(s)
+                if n in (1, 2, 3):
+                    self.senal_cmd.emit(n)
+                else:
+                    self.senal_txt.emit(s)   # p.ej. ticket=1001, producto=2, encuesta=5
+                continue
+            except ValueError:
+                self.senal_txt.emit(s)
+
     senal_cmd = pyqtSignal(int)
     senal_txt = pyqtSignal(str)
     senal_salir = pyqtSignal()
@@ -102,6 +145,9 @@ class GestorAplicacion:
         # cola de reproducción
         self.queue: List[str] = []
         self.next_state_after_queue: Optional[str] = None
+        
+        # 🔧 FIX: Flag para evitar procesamiento múltiple
+        self.processing_video_end = False
 
         # hilo consola
         self.hilo = HiloEntrada()
@@ -138,6 +184,19 @@ class GestorAplicacion:
             print("[ERR] Descargando", resp_name, ":", e)
             return None
 
+    # 🔧 FIX: Desconectar SIEMPRE antes de reconectar
+    def _safe_disconnect_all(self, win):
+        """Desconecta todas las señales de video_terminado/transicion_solicitada"""
+        try:
+            if isinstance(win, VentanaInteraccion):
+                win.video_terminado.disconnect()
+            elif isinstance(win, VentanaReproductorVideo):
+                win.transicion_solicitada.disconnect()
+            elif isinstance(win, VentanaBienvenida):
+                win.video_terminado.disconnect()
+        except TypeError:
+            pass  # No había conexiones
+
     def _play_resp(self, resp_name: str):
         self._bloquear(True)
         if resp_name in RESP_TEXTO:
@@ -147,20 +206,25 @@ class GestorAplicacion:
             src = self.mapa.get(resp_name)
             if not isinstance(self.ventana_actual, VentanaInteraccion):
                 win = VentanaInteraccion(src)
+                self._safe_disconnect_all(win)  # 🔧 Limpieza
                 self._hook_interaccion(win)
                 self._swap(win)
             else:
+                # 🔧 FIX: Desconectar antes de re-hookear
+                self._safe_disconnect_all(self.ventana_actual)
                 self._hook_interaccion(self.ventana_actual)
                 self.ventana_actual.cambiar_video_unidad(src, nombre_resp=resp_name)
         else:  # RESP_UNICA
             ruta = self._ensure_local_resp(resp_name)
             win = VentanaReproductorVideo(ruta if ruta else None)
+            self._safe_disconnect_all(win)  # 🔧 Limpieza
             self._hook_unica(win)
             self._swap(win)
 
     def _enqueue_and_play(self, resp_list: List[str], next_state: str):
         self.queue = list(resp_list)
         self.next_state_after_queue = next_state
+        self.processing_video_end = False  # 🔧 Reset flag
         self._play_next_in_queue()
 
     def _play_next_in_queue(self):
@@ -175,20 +239,25 @@ class GestorAplicacion:
 
     # ----- hooks fin video -----
     def _hook_interaccion(self, win: VentanaInteraccion):
-        try: win.video_terminado.disconnect()
-        except: pass
+        # Ya limpiamos en _play_resp, solo conectamos
         win.video_terminado.connect(self._on_video_finished)
 
     def _hook_unica(self, win: VentanaReproductorVideo):
-        try: win.transicion_solicitada.disconnect()
-        except: pass
+        # Ya limpiamos en _play_resp, solo conectamos
         win.transicion_solicitada.connect(self._on_video_finished)
 
     def _on_video_finished(self):
+        # 🔧 FIX: Evitar procesamiento múltiple con flag
+        if self.processing_video_end:
+            return
+        self.processing_video_end = True
+        
         # Si había secuencia, continúa o aplica el next_state
         if self.queue:
+            self.processing_video_end = False  # Reset para el siguiente
             self._play_next_in_queue()
             return
+            
         # Secuencia de 1 elemento ya terminó: aplicar next_state si existe
         self._bloquear(False)
         if self.next_state_after_queue:
@@ -196,6 +265,8 @@ class GestorAplicacion:
             self.next_state_after_queue = None
         else:
             self._print_prompt()
+        
+        self.processing_video_end = False  # Reset después de procesar
 
     # ----- ventanas -----
     def _swap(self, nueva):
@@ -338,12 +409,24 @@ class GestorAplicacion:
 
     # ----- comandos 1/2/3 -----
     def _on_cmd(self, n: int):
-        if self.playing:
-            print("⏳ Espera a que termine el video…"); return
-        if n == 1: self.mostrar_bienvenida()
-        elif n == 2: self.mostrar_interaccion_inicio()
-        elif n == 3: QTimer.singleShot(100, self.app.quit)
-        else: print("Comandos: 1, 2, 3")
+    # Si el estado actual espera números, trata el comando como texto
+    if self.state in {ST.WAIT_TICKET, ST.WAIT_PRODUCT, ST.SURVEY}:
+        self._on_txt(str(n))
+        return
+
+    if self.playing:
+        print("⏳ Espera a que termine el video…")
+        return
+
+    if n == 1:
+        self.mostrar_bienvenida()
+    elif n == 2:
+        self.mostrar_interaccion_inicio()
+    elif n == 3:
+        QTimer.singleShot(100, self.app.quit)
+    else:
+        print("Comandos: 1, 2, 3")
+
 
     # ----- arranques -----
     def mostrar_bienvenida(self):
@@ -360,8 +443,7 @@ class GestorAplicacion:
             except Exception as e:
                 print("[ERR] No se pudo preparar bienvenida:", e)
         win = VentanaBienvenida(str(dest) if dest.is_file() else None)
-        try: win.video_terminado.disconnect()
-        except: pass
+        self._safe_disconnect_all(win)  # 🔧 Limpieza
         win.video_terminado.connect(self.mostrar_interaccion_inicio)
         self._bloquear(True)
         self._swap(win)
@@ -369,17 +451,19 @@ class GestorAplicacion:
     def mostrar_interaccion_inicio(self):
         src = self.mapa.get("resp1")
         win = VentanaInteraccion(src)
-        self._hook_interaccion(win)
+        self._safe_disconnect_all(win)  # 🔧 Limpieza
         self._swap(win)
         self._bloquear(True)
         print("\n" + RESP_TEXTO["resp1"] + "\n")
+        
+        # 🔧 FIX: Usar closure sin reconexión compleja
         def _after_first():
             self._bloquear(False)
             self._set_state(ST.MAIN)
-            try: win.video_terminado.disconnect(_after_first)
-            except: pass
-        try: win.video_terminado.disconnect()
-        except: pass
+            # Reconectar al handler normal
+            self._safe_disconnect_all(win)
+            self._hook_interaccion(win)
+            
         win.video_terminado.connect(_after_first)
 
     def run(self):
