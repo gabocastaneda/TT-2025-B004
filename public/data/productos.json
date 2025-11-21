@@ -7,7 +7,7 @@
     "Disponibilidad": true,
     "CodigoArea": 10,
     "idDescuento": 2,
-    "ImagenURL": "productos/tv_led_50.jpg"
+    "ImagenURL": "productos/tv_led_50.png"
   },
   "102": {
     "idProducto": 102,
@@ -17,7 +17,7 @@
     "Disponibilidad": true,
     "CodigoArea": 10,
     "idDescuento": null,
-    "ImagenURL": "productos/laptop_gamer.jpg"
+    "ImagenURL": "productos/laptop_gamer.png"
   },
   "103": {
     "idProducto": 103,
@@ -27,7 +27,7 @@
     "Disponibilidad": true,
     "CodigoArea": 10,
     "idDescuento": 1,
-    "ImagenURL": "productos/audifonos_bt.jpg"
+    "ImagenURL": "productos/audifonos_bt.png"
   },
   "104": {
     "idProducto": 104,
@@ -37,7 +37,7 @@
     "Disponibilidad": true,
     "CodigoArea": 10,
     "idDescuento": null,
-    "ImagenURL": "productos/mouse_wireless.jpg"
+    "ImagenURL": "productos/mouse_wireless.png"
   },
   "105": {
     "idProducto": 105,
@@ -47,7 +47,7 @@
     "Disponibilidad": true,
     "CodigoArea": 10,
     "idDescuento": 2,
-    "ImagenURL": "productos/teclado_rgb.jpg"
+    "ImagenURL": "productos/teclado_rgb.png"
   },
   "201": {
     "idProducto": 201,
@@ -57,7 +57,7 @@
     "Disponibilidad": true,
     "CodigoArea": 20,
     "idDescuento": 1,
-    "ImagenURL": "productos/camisa_lino.jpg"
+    "ImagenURL": "productos/camisa_lino.png"
   },
   "202": {
     "idProducto": 202,
@@ -77,7 +77,7 @@
     "Disponibilidad": true,
     "CodigoArea": 20,
     "idDescuento": null,
-    "ImagenURL": "productos/jeans.jpg"
+    "ImagenURL": "productos/jeans.png"
   },
   "204": {
     "idProducto": 204,
@@ -87,7 +87,7 @@
     "Disponibilidad": true,
     "CodigoArea": 20,
     "idDescuento": 1,
-    "ImagenURL": "productos/cinturon.jpg"
+    "ImagenURL": "productos/cinturon.png"
   },
   "301": {
     "idProducto": 301,
@@ -97,7 +97,7 @@
     "Disponibilidad": true,
     "CodigoArea": 30,
     "idDescuento": 2,
-    "ImagenURL": "productos/cafetera.jpg"
+    "ImagenURL": "productos/cafetera.png"
   },
   "302": {
     "idProducto": 302,
@@ -107,7 +107,7 @@
     "Disponibilidad": true,
     "CodigoArea": 30,
     "idDescuento": null,
-    "ImagenURL": "productos/sabanas_queen.jpg"
+    "ImagenURL": "productos/sabanas_queen.png"
   },
   "303": {
     "idProducto": 303,
@@ -117,7 +117,7 @@
     "Disponibilidad": true,
     "CodigoArea": 30,
     "idDescuento": null,
-    "ImagenURL": "productos/podadora.jpg"
+    "ImagenURL": "productos/podadora.png"
   },
   "401": {
     "idProducto": 401,
@@ -127,7 +127,7 @@
     "Disponibilidad": true,
     "CodigoArea": 40,
     "idDescuento": 1,
-    "ImagenURL": "productos/bloques.jpg"
+    "ImagenURL": "productos/bloques.png"
   },
   "402": {
     "idProducto": 402,
@@ -137,7 +137,7 @@
     "Disponibilidad": true,
     "CodigoArea": 40,
     "idDescuento": null,
-    "ImagenURL": "productos/muneca.jpg"
+    "ImagenURL": "productos/muneca.png"
   },
   "403": {
     "idProducto": 403,
@@ -147,7 +147,7 @@
     "Disponibilidad": false,
     "CodigoArea": 40,
     "idDescuento": null,
-    "ImagenURL": "productos/auto_rc.jpg"
+    "ImagenURL": "productos/auto_rc.png"
   },
   "501": {
     "idProducto": 501,
@@ -157,7 +157,7 @@
     "Disponibilidad": true,
     "CodigoArea": 50,
     "idDescuento": null,
-    "ImagenURL": "productos/balon_futbol.jpg"
+    "ImagenURL": "productos/balon_futbol.png"
   },
   "502": {
     "idProducto": 502,
@@ -167,7 +167,7 @@
     "Disponibilidad": true,
     "CodigoArea": 50,
     "idDescuento": 1,
-    "ImagenURL": "productos/tapete_yoga.jpg"
+    "ImagenURL": "productos/tapete_yoga.png"
   },
   "503": {
     "idProducto": 503,
@@ -177,6 +177,6 @@
     "Disponibilidad": true,
     "CodigoArea": 50,
     "idDescuento": 2,
-    "ImagenURL": "productos/pesas_set.jpg"
+    "ImagenURL": "productos/pesas_set.png"
   }
 }
