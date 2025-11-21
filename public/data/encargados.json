@@ -1,0 +1,47 @@
+{
+  "LORM750404DD4": {
+    "RFCEncargado": "LORM750404DD4",
+    "NombreEncargado": "Maria",
+    "ApPaterno": "Lopez",
+    "ApMaterno": "Ramirez",
+    "Telefono": "5511223344",
+    "Correo": "maria.lopez@tienda.com",
+    "idTurno": 1
+  },
+  "ROGE800505EE5": {
+    "RFCEncargado": "ROGE800505EE5",
+    "NombreEncargado": "Carlos",
+    "ApPaterno": "Gonzalez",
+    "ApMaterno": "Romero",
+    "Telefono": "5522334455",
+    "Correo": "carlos.gonzalez@tienda.com",
+    "idTurno": 2
+  },
+  "SAVA880115FF6": {
+    "RFCEncargado": "SAVA880115FF6",
+    "NombreEncargado": "Ana",
+    "ApPaterno": "Solis",
+    "ApMaterno": "Vargas",
+    "Telefono": "5533445566",
+    "Correo": "ana.solis@tienda.com",
+    "idTurno": 1
+  },
+  "HERL920320GG7": {
+    "RFCEncargado": "HERL920320GG7",
+    "NombreEncargado": "Luis",
+    "ApPaterno": "Hernandez",
+    "ApMaterno": "Lopez",
+    "Telefono": "5544556677",
+    "Correo": "luis.hernandez@tienda.com",
+    "idTurno": 2
+  },
+  "MART850625HH8": {
+    "RFCEncargado": "MART850625HH8",
+    "NombreEncargado": "Teresa",
+    "ApPaterno": "Martinez",
+    "ApMaterno": "Garcia",
+    "Telefono": "5555667788",
+    "Correo": "teresa.martinez@tienda.com",
+    "idTurno": 3
+  }
+}

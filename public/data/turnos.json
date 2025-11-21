@@ -1,0 +1,14 @@
+{
+  "1": {
+    "idTurno": 1,
+    "NombreTurno": "Matutino"
+  },
+  "2": {
+    "idTurno": 2,
+    "NombreTurno": "Vespertino"
+  },
+  "3": {
+    "idTurno": 3,
+    "NombreTurno": "Nocturno"
+  }
+}

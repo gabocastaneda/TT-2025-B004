@@ -1,0 +1,23 @@
+{
+  "1": {
+    "idCliente": 1,
+    "RFCCliente": "GOPJ850101AA1",
+    "Direccion": "Calle Falsa 123, Col Centro",
+    "TelefonoCliente": "5512345678",
+    "CorreoCliente": "juan.perez@email.com"
+  },
+  "2": {
+    "idCliente": 2,
+    "RFCCliente": "GAML880202BB2",
+    "Direccion": "Av. Siempre Viva 742",
+    "TelefonoCliente": "5587654321",
+    "CorreoCliente": "ana.garcia@email.com"
+  },
+  "3": {
+    "idCliente": 3,
+    "RFCCliente": "SARM900303CC3",
+    "Direccion": "Blvd. de los Sueños 45",
+    "TelefonoCliente": "5555555555",
+    "CorreoCliente": "miguel.sanchez@email.com"
+  }
+}

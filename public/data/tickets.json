@@ -1,0 +1,12 @@
+{
+  "1001": {
+    "NumTicket": 1001,
+    "FechaCompra": "2025-10-20 13:45:10",
+    "idCliente": 1
+  },
+  "1002": {
+    "NumTicket": 1002,
+    "FechaCompra": "2025-10-20 15:10:25",
+    "idCliente": 2
+  }
+}

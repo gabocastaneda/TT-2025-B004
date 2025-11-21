@@ -1,0 +1,182 @@
+{
+  "101": {
+    "idProducto": 101,
+    "NombreProducto": "Televisión LED 50\"",
+    "PrecioProducto": 8500.0,
+    "Descripcion": "Smart TV 4K UHD",
+    "Disponibilidad": true,
+    "CodigoArea": 10,
+    "idDescuento": 2,
+    "ImagenURL": "productos/tv_led_50.jpg"
+  },
+  "102": {
+    "idProducto": 102,
+    "NombreProducto": "Laptop Gamer",
+    "PrecioProducto": 22000.0,
+    "Descripcion": "Laptop con tarjeta gráfica dedicada",
+    "Disponibilidad": true,
+    "CodigoArea": 10,
+    "idDescuento": null,
+    "ImagenURL": "productos/laptop_gamer.jpg"
+  },
+  "103": {
+    "idProducto": 103,
+    "NombreProducto": "Audífonos Bluetooth",
+    "PrecioProducto": 1800.0,
+    "Descripcion": "Cancelación de ruido activa, 20hrs de batería",
+    "Disponibilidad": true,
+    "CodigoArea": 10,
+    "idDescuento": 1,
+    "ImagenURL": "productos/audifonos_bt.jpg"
+  },
+  "104": {
+    "idProducto": 104,
+    "NombreProducto": "Mouse Inalámbrico",
+    "PrecioProducto": 450.0,
+    "Descripcion": "Mouse ergonómico recargable",
+    "Disponibilidad": true,
+    "CodigoArea": 10,
+    "idDescuento": null,
+    "ImagenURL": "productos/mouse_wireless.jpg"
+  },
+  "105": {
+    "idProducto": 105,
+    "NombreProducto": "Teclado Mecánico RGB",
+    "PrecioProducto": 2100.0,
+    "Descripcion": "Switch azul, layout en español",
+    "Disponibilidad": true,
+    "CodigoArea": 10,
+    "idDescuento": 2,
+    "ImagenURL": "productos/teclado_rgb.jpg"
+  },
+  "201": {
+    "idProducto": 201,
+    "NombreProducto": "Camisa de Lino",
+    "PrecioProducto": 750.0,
+    "Descripcion": "Camisa casual manga larga",
+    "Disponibilidad": true,
+    "CodigoArea": 20,
+    "idDescuento": 1,
+    "ImagenURL": "productos/camisa_lino.jpg"
+  },
+  "202": {
+    "idProducto": 202,
+    "NombreProducto": "Zapatos de Piel",
+    "PrecioProducto": 1200.0,
+    "Descripcion": "Zapatos formales color negro",
+    "Disponibilidad": true,
+    "CodigoArea": 20,
+    "idDescuento": 1,
+    "ImagenURL": "productos/zapatos_piel.jpg"
+  },
+  "203": {
+    "idProducto": 203,
+    "NombreProducto": "Jeans de Mezclilla",
+    "PrecioProducto": 899.0,
+    "Descripcion": "Corte recto, color azul oscuro",
+    "Disponibilidad": true,
+    "CodigoArea": 20,
+    "idDescuento": null,
+    "ImagenURL": "productos/jeans.jpg"
+  },
+  "204": {
+    "idProducto": 204,
+    "NombreProducto": "Cinturón de Piel",
+    "PrecioProducto": 500.0,
+    "Descripcion": "Hebilla de acero inoxidable",
+    "Disponibilidad": true,
+    "CodigoArea": 20,
+    "idDescuento": 1,
+    "ImagenURL": "productos/cinturon.jpg"
+  },
+  "301": {
+    "idProducto": 301,
+    "NombreProducto": "Cafetera de Goteo",
+    "PrecioProducto": 950.0,
+    "Descripcion": "Capacidad 12 tazas, programable",
+    "Disponibilidad": true,
+    "CodigoArea": 30,
+    "idDescuento": 2,
+    "ImagenURL": "productos/cafetera.jpg"
+  },
+  "302": {
+    "idProducto": 302,
+    "NombreProducto": "Juego de Sábanas Queen",
+    "PrecioProducto": 1100.0,
+    "Descripcion": "Algodón 400 hilos, color blanco",
+    "Disponibilidad": true,
+    "CodigoArea": 30,
+    "idDescuento": null,
+    "ImagenURL": "productos/sabanas_queen.jpg"
+  },
+  "303": {
+    "idProducto": 303,
+    "NombreProducto": "Podadora Eléctrica",
+    "PrecioProducto": 3200.0,
+    "Descripcion": "1500W, bolsa recolectora",
+    "Disponibilidad": true,
+    "CodigoArea": 30,
+    "idDescuento": null,
+    "ImagenURL": "productos/podadora.jpg"
+  },
+  "401": {
+    "idProducto": 401,
+    "NombreProducto": "Bloques de Construcción (Set Grande)",
+    "PrecioProducto": 1500.0,
+    "Descripcion": "+500 piezas, edad 5+",
+    "Disponibilidad": true,
+    "CodigoArea": 40,
+    "idDescuento": 1,
+    "ImagenURL": "productos/bloques.jpg"
+  },
+  "402": {
+    "idProducto": 402,
+    "NombreProducto": "Muñeca Articulada",
+    "PrecioProducto": 600.0,
+    "Descripcion": "Incluye 3 cambios de ropa",
+    "Disponibilidad": true,
+    "CodigoArea": 40,
+    "idDescuento": null,
+    "ImagenURL": "productos/muneca.jpg"
+  },
+  "403": {
+    "idProducto": 403,
+    "NombreProducto": "Auto a Control Remoto",
+    "PrecioProducto": 750.0,
+    "Descripcion": "Batería recargable, escala 1:16",
+    "Disponibilidad": false,
+    "CodigoArea": 40,
+    "idDescuento": null,
+    "ImagenURL": "productos/auto_rc.jpg"
+  },
+  "501": {
+    "idProducto": 501,
+    "NombreProducto": "Balón de Fútbol No. 5",
+    "PrecioProducto": 680.0,
+    "Descripcion": "Balón oficial de liga, piel sintética",
+    "Disponibilidad": true,
+    "CodigoArea": 50,
+    "idDescuento": null,
+    "ImagenURL": "productos/balon_futbol.jpg"
+  },
+  "502": {
+    "idProducto": 502,
+    "NombreProducto": "Tapete de Yoga",
+    "PrecioProducto": 490.0,
+    "Descripcion": "6mm de grosor, antiderrapante",
+    "Disponibilidad": true,
+    "CodigoArea": 50,
+    "idDescuento": 1,
+    "ImagenURL": "productos/tapete_yoga.jpg"
+  },
+  "503": {
+    "idProducto": 503,
+    "NombreProducto": "Pesas (Set de 2)",
+    "PrecioProducto": 1300.0,
+    "Descripcion": "Mancuernas ajustables de 20kg (10kg c/u)",
+    "Disponibilidad": true,
+    "CodigoArea": 50,
+    "idDescuento": 2,
+    "ImagenURL": "productos/pesas_set.jpg"
+  }
+}
