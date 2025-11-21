@@ -46,7 +46,6 @@ class ST:
     DEV_REASON = "DEV_REASON"
     ASK_TICKET_YN = "ASK_TICKET_YN"
     WAIT_TICKET = "WAIT_TICKET"
-    SHOW_TICKET = "SHOW_TICKET"
     WAIT_PRODUCT = "WAIT_PRODUCT"
     MORE_PRODUCT = "MORE_PRODUCT"
     RESP3_NINGUNO = "RESP3_NINGUNO"
@@ -87,6 +86,7 @@ class GestorAplicacion:
         self.app = app
         self.ventana_actual = None
         self.playing = False
+        self.modo_gestos_activo = False  # Control del modo gestos
 
         self.dir_public = Path(__file__).resolve().parents[1]
         self.dir_videos = self.dir_public / "videos"
@@ -122,6 +122,7 @@ class GestorAplicacion:
         try:
             if isinstance(win, VentanaInteraccion):
                 win.video_terminado.disconnect()
+                win.gesto_detectado.disconnect()  # NUEVO: desconectar gestos
             elif isinstance(win, VentanaReproductorVideo):
                 win.transicion_solicitada.disconnect()
             elif isinstance(win, VentanaBienvenida):
@@ -147,12 +148,43 @@ class GestorAplicacion:
             print("[ERR] Descargando", resp_name, ":", e)
             return None
 
+    # ---------- GESTOS ----------
+    def _activar_modo_gestos(self, activar: bool = True):
+        """Activa/desactiva la detección de gestos en la ventana actual"""
+        self.modo_gestos_activo = activar
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            self.ventana_actual.set_modo_gestos(activar)
+            if activar:
+                # Conectar la señal de gestos detectados
+                try:
+                    self.ventana_actual.gesto_detectado.disconnect()
+                except:
+                    pass
+                self.ventana_actual.gesto_detectado.connect(self._on_gesto_detectado)
+                print("[GESTOS]Modo gestos activado")
+            else:
+                print("[GESTOS]Modo gestos desactivado")
+
+    def _on_gesto_detectado(self, gesto: str):
+        """Callback cuando se detecta un gesto desde la cámara"""
+        if not self.modo_gestos_activo or self.playing:
+            return
+            
+        print(f"[GESTOS]Gesto detectado: '{gesto}'")
+        
+        # USAR DIRECTAMENTE EL GESTO COMO ENTRADA
+        self._on_txt_ui_guarded(gesto)
+
     # ---------- reproducción ----------
     def _hook_interaccion(self, win: VentanaInteraccion):
         win.video_terminado.connect(self._on_video_finished)
+        # NUEVO: Activar gestos cuando tenemos una VentanaInteraccion
+        self._activar_modo_gestos(True)
 
     def _hook_unica(self, win: VentanaReproductorVideo):
         win.transicion_solicitada.connect(self._on_video_finished)
+        # En ventanas de respuesta única, desactivar gestos
+        self._activar_modo_gestos(False)
 
     def _play_resp(self, resp_name: str):
         self._bloquear(True)
@@ -200,6 +232,8 @@ class GestorAplicacion:
         if isinstance(self.ventana_actual, VentanaInteraccion):
             try:
                 self.ventana_actual.set_modo_reproduccion(False)  # cámara regresa grande, banner rojo OFF
+                # Reactivar gestos cuando termina el video
+                self._activar_modo_gestos(True)
             except Exception as e:
                 print("[UI] set_modo_reproduccion(False) error:", e)
 
@@ -228,6 +262,11 @@ class GestorAplicacion:
             QTimer.singleShot(100, vieja.close)
         else:
             self.ventana_actual = nueva
+        # NUEVO: Actualizar modo gestos al cambiar ventana
+        if isinstance(nueva, VentanaInteraccion):
+            self._activar_modo_gestos(True)
+        else:
+            self._activar_modo_gestos(False)
 
     # ---------- estados / prompts ----------
     def _set_state(self, st: str):
@@ -242,17 +281,20 @@ class GestorAplicacion:
         elif self.state == ST.DEV_REASON:
             print("> Estas son nuestras opciones para producto: danado / defecto / equivocacion")
         elif self.state == ST.ASK_TICKET_YN:
-            print("> Escribe: si  |  no")
+            print("> Gestos: 'si' o 'no'")
         elif self.state == ST.WAIT_TICKET:
             print("> Captura el número de ticket:")
         elif self.state == ST.WAIT_PRODUCT:
             print("> CAPTURE EL NUMERO DEL PRODUCTO:")
         elif self.state == ST.MORE_PRODUCT:
             print("> ¿Hay otro producto? (si/no)")
+            print("> Gestos: 'si' o 'no'")
         elif self.state == ST.RESP3_NINGUNO:
             print("> ¿Hay algo más en lo que pueda ayudar? (si/no)")
+            print("> Gestos: 'si' o 'no'")
         elif self.state == ST.RESP3_NO_TICKET:
             print("> Escribe: no  (seguirá a encuesta)")
+            print("> Gesto: 'no'")
         elif self.state == ST.SURVEY:
             print("> Califica del 1 al 5:")
 
@@ -268,7 +310,7 @@ class GestorAplicacion:
 
     def _on_txt_ui(self, s: str):
         if self.playing:
-            print("⏳ Espera a que termine el video…"); return
+            print("Espera a que termine el video…"); return
 
         v = _norm(s)
 

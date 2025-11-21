@@ -17,6 +17,7 @@ _DRIVE_RE = re.compile(r"https://www\.googleapis\.com/drive/v3/files/([^?]+)")
 class VentanaInteraccion(QMainWindow):
     redimensionada = pyqtSignal()
     video_terminado = pyqtSignal()  # desbloquea consola tras RESP
+    gesto_detectado = pyqtSignal(str)  # NUEVA señal para gestos detectados
 
     def __init__(self, src_inicial: Optional[str] = None):
         super().__init__()
@@ -43,6 +44,7 @@ class VentanaInteraccion(QMainWindow):
         )
         self.view_cam = QLabel(self.recuadro_cam)
         self.view_cam.setAlignment(Qt.AlignCenter)
+        self.view_cam.setStyleSheet("background:black; color:white;")
 
         # --- Recuadro video RESP (der) ---
         self.recuadro_vid = QFrame(self)
@@ -51,6 +53,7 @@ class VentanaInteraccion(QMainWindow):
         )
         self.view_vid = QLabel(self.recuadro_vid)
         self.view_vid.setAlignment(Qt.AlignCenter)
+        self.view_vid.setStyleSheet("background:black; color:white;")
 
         # --- Banner rojo bajo el área de video (solo durante reproducción) ---
         self.banner = QFrame(self)
@@ -78,6 +81,10 @@ class VentanaInteraccion(QMainWindow):
 
         # --- Cámara ---
         self.cap_cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        if not self.cap_cam.isOpened():
+            # Intentar sin DSHOW
+            self.cap_cam = cv2.VideoCapture(0)
+            
         self.timer_cam = QTimer(self)
         self.timer_cam.timeout.connect(self._tick_cam)
         self.timer_cam.start(30)
@@ -85,6 +92,21 @@ class VentanaInteraccion(QMainWindow):
         # --- Video RESP (OpenCV + hilo) ---
         self.cap_resp = None
         self.hilo_resp: Optional[HiloVideo] = None
+
+        # --- Inferencia de gestos ---
+        self.inferencia = None
+        self.modo_gestos = False  # Controla si estamos en modo detección de gestos
+        
+        # Label para mostrar estado de gestos
+        self.label_estado_gestos = QLabel(self.recuadro_cam)
+        self.label_estado_gestos.setAlignment(Qt.AlignCenter)
+        self.label_estado_gestos.setStyleSheet(
+            "background: rgba(0,0,0,0.8); color: white; padding: 8px; border-radius: 8px; font-size: 14px;"
+        )
+        self.label_estado_gestos.hide()
+        
+        # Inicializar inferencia de gestos
+        self._inicializar_inferencia_gestos()
 
         # Estado de layout
         self._modo_reproduccion = False  # True => cámara pequeña + banner rojo ON
@@ -98,20 +120,146 @@ class VentanaInteraccion(QMainWindow):
             self.set_modo_reproduccion(True)
             self.cambiar_video_unidad(src_inicial, nombre_resp="resp1")
 
-    # =================== Cámara (espejo SOLO la cámara) ===================
+    def set_modo_gestos(self, activar: bool):
+        """Activa/desactiva el modo de detección de gestos"""
+        self.modo_gestos = activar
+        if activar:
+            print("[GESTOS] Modo gestos activado")
+            self.label_estado_gestos.show()
+            self._actualizar_estado_gestos("🟢 LISTO - Mostrando manos", "#27ae60")
+        else:
+            print("[GESTOS] Modo gestos desactivado")
+            self.label_estado_gestos.hide()
+    
+    def _inicializar_inferencia_gestos(self):
+        """Inicializa el módulo de inferencia desde el backend"""
+        try:
+            # Nueva ruta del modelo en backend
+            modelo_path = Path(__file__).resolve().parents[3] / "backend" / "modelo.pkl"
+            print(f"[GESTOS] Buscando modelo en: {modelo_path}")
+            
+            # Importar desde el backend
+            from backend.inferencia import InferenciaGestos
+            
+            if modelo_path.exists():
+                self.inferencia = InferenciaGestos(str(modelo_path))
+                print("[GESTOS] Modelo cargado desde backend")
+            else:
+                print("[GESTOS] Modelo no encontrado en backend, usando modo simulación")
+                self.inferencia = InferenciaGestos()
+                    
+            self.inferencia.inicializar_deteccion()
+            self.inferencia.set_callback_prediccion(self._on_gesto_detectado)
+            print("[GESTOS] Inferencia inicializada desde backend")
+                    
+        except Exception as e:
+            print(f"[GESTOS] Error inicializando inferencia: {e}")
+            # Fallback básico
+            self.inferencia = type('InferenciaSimulada', (), {})()
+            self.inferencia.procesar_frame = lambda frame: (cv2.flip(frame, 1), "Simulación", 0.0, "SIMULACION")
+            self.inferencia.set_callback_prediccion = lambda cb: setattr(self.inferencia, 'callback_prediccion', cb)
+            self.inferencia.liberar = lambda: None
+
+    def _on_gesto_detectado(self, gesto: str):
+        """Callback cuando se detecta un gesto"""
+        print(f"[GESTOS] Gesto detectado: {gesto}")
+        self.gesto_detectado.emit(gesto)
+
+    def set_modo_gestos(self, activar: bool):
+        """Activa/desactiva el modo de detección de gestos"""
+        self.modo_gestos = activar
+        if activar:
+            print("[GESTOS] Modo gestos activado")
+            self.label_estado_gestos.show()
+            self._actualizar_estado_gestos("LISTO - Mostrando manos", "#27ae60")
+        else:
+            print("[GESTOS] Modo gestos desactivado")
+            self.label_estado_gestos.hide()
+
+    def _actualizar_estado_gestos(self, mensaje: str, color: str = "#3498db"):
+        """Actualiza el label de estado de gestos"""
+        self.label_estado_gestos.setText(mensaje)
+        self.label_estado_gestos.setStyleSheet(
+            f"background: rgba(0,0,0,0.8); color: {color}; padding: 8px; border-radius: 8px; font-size: 14px; font-weight: bold;"
+        )
+        # Recolocar el label
+        self._recolocar_estado_gestos()
+
+    def _recolocar_estado_gestos(self):
+        """Recoloca el label de estado de gestos en la esquina inferior"""
+        if self.label_estado_gestos.isVisible():
+            label_width = 300
+            label_height = 40
+            x = 10
+            y = self.recuadro_cam.height() - label_height - 10
+            self.label_estado_gestos.setGeometry(x, y, label_width, label_height)
+
+    # =================== Cámara (con detección de gestos) ===================
     def _tick_cam(self):
         if not self.cap_cam or not self.cap_cam.isOpened():
+            self.view_cam.setText("CÁMARA NO DISPONIBLE\n\nVerifique que:\n• La cámara esté conectada\n• No esté en uso por otra aplicación\n• Los drivers estén instalados")
             return
+            
         ok, frame = self.cap_cam.read()
         if not ok:
+            self.view_cam.setText("ERROR LEYENDO CÁMARA\n\nReinicie la aplicación")
             return
-        frame = cv2.flip(frame, 1)  # espejo en cámara
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        h, w, ch = rgb.shape
-        qimg = QImage(rgb.data, w, h, ch*w, QImage.Format_RGB888)
-        self.view_cam.setPixmap(QPixmap.fromImage(qimg).scaled(
-            self.view_cam.width(), self.view_cam.height(),
-            Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            
+        # Procesar frame para detección de gestos si está activo el modo
+        frame_procesado = frame
+        if self.modo_gestos and self.inferencia:
+            try:
+                frame_procesado, pred, conf, estado = self.inferencia.procesar_frame(frame)
+                
+                # Actualizar estado visual
+                if estado == "GRABANDO":
+                    self._actualizar_estado_gestos("GRABANDO gesto...", "#e67e22")
+                elif estado == "RECONOCIDO":
+                    self._actualizar_estado_gestos(f"Reconocido: {pred}", "#27ae60")
+                elif estado == "LISTO":
+                    self._actualizar_estado_gestos("Mueve la mano", "#3498db")
+                elif estado == "ESPERANDO":
+                    self._actualizar_estado_gestos("Acerca tu mano", "#95a5a6")
+                elif estado == "MANO_DETECTADA":
+                    self._actualizar_estado_gestos("Mano detectada", "#9b59b6")
+                elif estado == "SIMULACION":
+                    self._actualizar_estado_gestos("Modo simulación", "#e67e22")
+                elif estado == "ERROR":
+                    self._actualizar_estado_gestos("Error detección", "#e74c3c")
+                else:
+                    self._actualizar_estado_gestos(f"{estado}", "#f39c12")
+                    
+            except Exception as e:
+                print(f"[GESTOS] Error procesando frame: {e}")
+                frame_procesado = cv2.flip(frame, 1)  # fallback a espejo normal
+                self._actualizar_estado_gestos("Error procesando", "#e74c3c")
+        else:
+            frame_procesado = cv2.flip(frame, 1)  # espejo en cámara normal
+            if self.modo_gestos:
+                self._actualizar_estado_gestos("Gestos pausados", "#7f8c8d")
+
+        # Convertir y mostrar el frame
+        try:
+            rgb = cv2.cvtColor(frame_procesado, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb.shape
+            bytes_per_line = ch * w
+            
+            qimg = QImage(rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            
+            # Escalar manteniendo aspect ratio
+            if self.view_cam.width() > 0 and self.view_cam.height() > 0:
+                pixmap = QPixmap.fromImage(qimg)
+                scaled_pixmap = pixmap.scaled(
+                    self.view_cam.width(), self.view_cam.height(),
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation
+                )
+                self.view_cam.setPixmap(scaled_pixmap)
+            else:
+                self.view_cam.setPixmap(QPixmap.fromImage(qimg))
+                
+        except Exception as e:
+            print(f"[CAMARA] Error mostrando frame: {e}")
+            self.view_cam.setText("Error mostrando video")
 
     # =================== RESP (sin espejo) ===================
     def cambiar_video_unidad(self, src: Optional[str], nombre_resp: Optional[str] = None):
@@ -159,9 +307,12 @@ class VentanaInteraccion(QMainWindow):
         self.hilo_resp.start()
 
     def _pintar_resp(self, pix: QPixmap):
-        self.view_vid.setPixmap(pix.scaled(
-            self.view_vid.width(), self.view_vid.height(),
-            Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        if self.view_vid.width() > 0 and self.view_vid.height() > 0:
+            self.view_vid.setPixmap(pix.scaled(
+                self.view_vid.width(), self.view_vid.height(),
+                Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            self.view_vid.setPixmap(pix)
 
     def _on_video_end(self):
         # Apagamos modo reproducción y emitimos terminado
@@ -301,6 +452,9 @@ class VentanaInteraccion(QMainWindow):
 
         # Recoloca overlay para que siga al recuadro de video
         self._recolocar_overlay()
+        
+        # Recolocar estado de gestos
+        self._recolocar_estado_gestos()
 
     def _recolocar_overlay(self):
         # Overlay ocupa ~90% del recuadro de video
@@ -330,6 +484,11 @@ class VentanaInteraccion(QMainWindow):
             self.timer_cam.stop()
             if self.cap_cam:
                 self.cap_cam.release()
+        except Exception:
+            pass
+        try:
+            if self.inferencia:
+                self.inferencia.liberar()
         except Exception:
             pass
         ev.accept()
