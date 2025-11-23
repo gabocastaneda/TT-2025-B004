@@ -540,10 +540,10 @@ class InferenciaGestos:
                 )
 
         # Dibujar información en el frame
-        cv2.putText(frame_espejo, f"Prediccion: {self.prediccion_actual}", (10, 90),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(frame_espejo, f"Confianza: {self.confianza_actual*100:.1f}%", (10, 120),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        # cv2.putText(frame_espejo, f"Prediccion: {self.prediccion_actual}", (10, 90),
+        #            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        # cv2.putText(frame_espejo, f"Confianza: {self.confianza_actual*100:.1f}%", (10, 120),
+        #          cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
         self.mano_detectada_anteriormente = mano_actualmente_detectada
 
         return frame_espejo, self.prediccion_actual, self.confianza_actual, self.estado_prediccion
