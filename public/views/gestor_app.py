@@ -6,7 +6,6 @@ from typing import List, Optional
 
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QObject
 from PyQt5.QtWidgets import QApplication
-
 # Importaciones de vistas
 from public.views.formatos.bienvenida import VentanaBienvenida
 from public.views.formatos.respuesta_unica import VentanaReproductorVideo
