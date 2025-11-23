@@ -36,9 +36,14 @@ RESP_TEXTO = {
     "resp12": "Resp12- Opciones de devolución (dañado / defecto / equivocación)",
 }
 
-def _norm(s: str) -> str: return s.strip().lower()
-def _yes(s: str) -> bool: return _norm(s) in {"si","sí","yes","y","s"}
-def _no(s: str)  -> bool: return _norm(s) in {"no","n"}
+def _norm(s: str) -> str:
+    return s.strip().lower()
+
+def _yes(s: str) -> bool:
+    return _norm(s) in {"si","sí","yes","y","s"}
+
+def _no(s: str) -> bool:
+    return _norm(s) in {"no","n"}
 
 class ST:
     MAIN = "MAIN"
@@ -48,19 +53,26 @@ class ST:
     WAIT_TICKET = "WAIT_TICKET"
     WAIT_PRODUCT = "WAIT_PRODUCT"
     MORE_PRODUCT = "MORE_PRODUCT"
+    RESP3_MAIN = "RESP3_MAIN"
     RESP3_NINGUNO = "RESP3_NINGUNO"
     RESP3_NO_TICKET = "RESP3_NO_TICKET"
     SURVEY = "SURVEY"
 
 class HiloEntrada(QThread):
-    senal_txt = pyqtSignal(str)   # toda entrada va como texto
+    senal_txt = pyqtSignal(str)
     senal_salir = pyqtSignal()
+    
     def __init__(self):
         super().__init__()
         self._ena = True
         self._alive = True
-    def set_habilitado(self, on: bool): self._ena = bool(on)
-    def detener(self): self._alive = False
+    
+    def set_habilitado(self, on: bool):
+        self._ena = bool(on)
+    
+    def detener(self):
+        self._alive = False
+    
     def run(self):
         print("------------------------------------------------------------")
         print("FLUJO POR CONSOLA (entrada bloqueada mientras haya video)")
@@ -69,24 +81,25 @@ class HiloEntrada(QThread):
         print("------------------------------------------------------------")
         while self._alive:
             if not self._ena:
-                self.msleep(50); continue
+                self.msleep(50)
+                continue
             try:
                 s = input("> ").strip()
             except EOFError:
-                self.senal_salir.emit(); break
+                self.senal_salir.emit()
+                break
             if not s:
                 continue
-            # SIEMPRE rebotamos al hilo de UI desde el gestor
             self.senal_txt.emit(s)
 
 class GestorAplicacion:
-    FILE_ID_BIENVENIDA = "1D_Mzl0UdVYyTKY2a1jeOVW-2cKmZ30lj"  # bienvenida
+    FILE_ID_BIENVENIDA = "1D_Mzl0UdVYyTKY2a1jeOVW-2cKmZ30lj"
 
     def __init__(self, app: QApplication):
         self.app = app
         self.ventana_actual = None
         self.playing = False
-        self.modo_gestos_activo = False  # Control del modo gestos
+        self.modo_gestos_activo = False
 
         self.dir_public = Path(__file__).resolve().parents[1]
         self.dir_videos = self.dir_public / "videos"
@@ -95,34 +108,41 @@ class GestorAplicacion:
 
         self.mapa = build_mapa_videos_interaccion(self.dir_videos)
 
-        self.state: str = ST.MAIN
-        self.context = {"branch":None,"razon":None,"ticket_num":None,"ticket_bundle":None,"productos":[], "survey":None}
+        self.state = ST.MAIN
+        self.context = {
+            "branch": None,
+            "razon": None,
+            "ticket_num": None,
+            "ticket_bundle": None,
+            "productos": [],
+            "survey": None
+        }
 
-        self.queue: List[str] = []
-        self.next_state_after_queue: Optional[str] = None
+        self.queue = []
+        self.next_state_after_queue = None
         self.processing_video_end = False
 
         self.hilo = HiloEntrada()
-        # PUENTE: garantizamos UI-thread
         self.hilo.senal_txt.connect(lambda s: QTimer.singleShot(0, lambda: self._on_txt_ui_guarded(s)))
         self.hilo.senal_salir.connect(self.app.quit)
         self.hilo.start()
         self.app.aboutToQuit.connect(self._on_quit)
 
-    # ---------- util ----------
     def _bloquear(self, on: bool):
         self.playing = bool(on)
         self.hilo.set_habilitado(not on)
 
     def _on_quit(self):
-        try: self.hilo.detener()
-        except: pass
+        try:
+            self.hilo.detener()
+        except:
+            pass
 
     def _safe_disconnect_all(self, win):
         try:
             if isinstance(win, VentanaInteraccion):
                 win.video_terminado.disconnect()
-                win.gesto_detectado.disconnect()  # NUEVO: desconectar gestos
+                win.gesto_detectado.disconnect()
             elif isinstance(win, VentanaReproductorVideo):
                 win.transicion_solicitada.disconnect()
             elif isinstance(win, VentanaBienvenida):
@@ -132,30 +152,30 @@ class GestorAplicacion:
 
     def _ensure_local_resp(self, resp_name: str) -> Optional[str]:
         p = self.dir_videos / f"{resp_name}.mp4"
-        if p.is_file(): return str(p)
+        if p.is_file():
+            return str(p)
         file_id = FILE_IDS.get(resp_name)
-        if not file_id: return None
+        if not file_id:
+            return None
         try:
             print(f"[DESCARGA] {resp_name}.mp4 …")
             with requests.get(drive_api_url(file_id), stream=True, timeout=30) as r:
                 r.raise_for_status()
                 with open(p, "wb") as f:
                     for ch in r.iter_content(1<<20):
-                        if ch: f.write(ch)
+                        if ch:
+                            f.write(ch)
             print("[OK]", p)
             return str(p)
         except Exception as e:
             print("[ERR] Descargando", resp_name, ":", e)
             return None
 
-    # ---------- GESTOS ----------
     def _activar_modo_gestos(self, activar: bool = True):
-        """Activa/desactiva la detección de gestos en la ventana actual"""
         self.modo_gestos_activo = activar
         if isinstance(self.ventana_actual, VentanaInteraccion):
             self.ventana_actual.set_modo_gestos(activar)
             if activar:
-                # Conectar la señal de gestos detectados
                 try:
                     self.ventana_actual.gesto_detectado.disconnect()
                 except:
@@ -166,24 +186,23 @@ class GestorAplicacion:
                 print("[GESTOS]Modo gestos desactivado")
 
     def _on_gesto_detectado(self, gesto: str):
-        """Callback cuando se detecta un gesto desde la cámara"""
         if not self.modo_gestos_activo or self.playing:
             return
-            
         print(f"[GESTOS]Gesto detectado: '{gesto}'")
-        
-        # USAR DIRECTAMENTE EL GESTO COMO ENTRADA
         self._on_txt_ui_guarded(gesto)
 
-    # ---------- reproducción ----------
+    def _mostrar_error_entrada(self):
+        """Muestra la ventana de error cuando la entrada no es válida"""
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            self.ventana_actual.mostrar_error_captura()
+            print("[ERROR] Entrada no válida - mostrando mensaje al usuario")
+
     def _hook_interaccion(self, win: VentanaInteraccion):
         win.video_terminado.connect(self._on_video_finished)
-        # NUEVO: Activar gestos cuando tenemos una VentanaInteraccion
         self._activar_modo_gestos(True)
 
     def _hook_unica(self, win: VentanaReproductorVideo):
         win.transicion_solicitada.connect(self._on_video_finished)
-        # En ventanas de respuesta única, desactivar gestos
         self._activar_modo_gestos(False)
 
     def _play_resp(self, resp_name: str):
@@ -195,16 +214,16 @@ class GestorAplicacion:
             src = self.mapa.get(resp_name)
             if not isinstance(self.ventana_actual, VentanaInteraccion):
                 win = VentanaInteraccion(src)
-                win.set_modo_reproduccion(True)   # cámara chica, banner rojo ON
+                win.set_modo_reproduccion(True)
                 self._safe_disconnect_all(win)
                 self._hook_interaccion(win)
                 self._swap(win)
             else:
                 self._safe_disconnect_all(self.ventana_actual)
                 self._hook_interaccion(self.ventana_actual)
-                self.ventana_actual.set_modo_reproduccion(True)  # al iniciar RESP
+                self.ventana_actual.set_modo_reproduccion(True)
                 self.ventana_actual.cambiar_video_unidad(src, nombre_resp=resp_name)
-        else:  # RESP_UNICA
+        else:
             ruta = self._ensure_local_resp(resp_name)
             win = VentanaReproductorVideo(ruta if ruta else None)
             self._safe_disconnect_all(win)
@@ -219,7 +238,6 @@ class GestorAplicacion:
 
     def _play_next_in_queue(self):
         if not self.queue:
-            # fin de secuencia
             self._bloquear(False)
             if self.next_state_after_queue:
                 self._set_state(self.next_state_after_queue)
@@ -228,11 +246,9 @@ class GestorAplicacion:
         self._play_resp(self.queue.pop(0))
 
     def _on_video_finished(self):
-        # Al terminar cualquier RESP en Interacción, apagamos modo reproducción
         if isinstance(self.ventana_actual, VentanaInteraccion):
             try:
-                self.ventana_actual.set_modo_reproduccion(False)  # cámara regresa grande, banner rojo OFF
-                # Reactivar gestos cuando termina el video
+                self.ventana_actual.set_modo_reproduccion(False)
                 self._activar_modo_gestos(True)
             except Exception as e:
                 print("[UI] set_modo_reproduccion(False) error:", e)
@@ -262,13 +278,11 @@ class GestorAplicacion:
             QTimer.singleShot(100, vieja.close)
         else:
             self.ventana_actual = nueva
-        # NUEVO: Actualizar modo gestos al cambiar ventana
         if isinstance(nueva, VentanaInteraccion):
             self._activar_modo_gestos(True)
         else:
             self._activar_modo_gestos(False)
 
-    # ---------- estados / prompts ----------
     def _set_state(self, st: str):
         self.state = st
         self._print_prompt()
@@ -289,6 +303,9 @@ class GestorAplicacion:
         elif self.state == ST.MORE_PRODUCT:
             print("> ¿Hay otro producto? (si/no)")
             print("> Gestos: 'si' o 'no'")
+        elif self.state == ST.RESP3_MAIN:
+            print("> ¿Hay algo más en lo que pueda ayudar? (si/no)")
+            print("> Gestos: 'si' o 'no'")
         elif self.state == ST.RESP3_NINGUNO:
             print("> ¿Hay algo más en lo que pueda ayudar? (si/no)")
             print("> Gestos: 'si' o 'no'")
@@ -298,23 +315,21 @@ class GestorAplicacion:
         elif self.state == ST.SURVEY:
             print("> Califica del 1 al 5:")
 
-    # ---------- entrada guardada (UI thread + try/except) ----------
     def _on_txt_ui_guarded(self, s: str):
         try:
             self._on_txt_ui(s)
         except Exception as e:
             print("[UI] Excepción en entrada:", e)
             traceback.print_exc()
-            # no cerramos la app; dejamos al usuario en el estado actual
             self._print_prompt()
 
     def _on_txt_ui(self, s: str):
         if self.playing:
-            print("Espera a que termine el video…"); return
+            print("Espera a que termine el video…")
+            return
 
         v = _norm(s)
 
-        # Números según el estado actual
         if v.isdigit():
             if self.state == ST.WAIT_TICKET:
                 self._handle_ticket_number(int(v))
@@ -326,25 +341,27 @@ class GestorAplicacion:
                 n = int(v)
                 if 1 <= n <= 5:
                     self.context["survey"] = n
-                    print("\n--- Resumen ---")
-                    print(f"Rama: {self.context.get('branch')}")
-                    print(f"Razón: {self.context.get('razon')}")
-                    print(f"Ticket: {self.context.get('ticket_num')}")
-                    print(f"Productos: {self.context.get('productos')}")
-                    print(f"Encuesta: {self.context.get('survey')}")
-                    print("---------------\n")
-                    self._enqueue_and_play(["resp1"], ST.MAIN)
+                    self._mostrar_resumen_y_finalizar()
                 else:
-                    print("Responde con un número del 1 al 5.")
+                    print("[ERROR] Respuesta inválida. Debe ser del 1 al 5.")
+                    self._mostrar_error_entrada()
+                    self._print_prompt()
                 return
 
-        # Palabras
         if self.state == ST.MAIN:
             if v in {"devolucion","devolución"}:
-                self.context = {"branch":"devolucion","razon":None,"ticket_num":None,"ticket_bundle":None,"productos":[], "survey":None}
+                self.context = {
+                    "branch": "devolucion",
+                    "razon": None,
+                    "ticket_num": None,
+                    "ticket_bundle": None,
+                    "productos": [],
+                    "survey": None
+                }
                 self._enqueue_and_play(["resp11"], ST.DEV_MENU)
             else:
-                print("Por ahora sólo 'devolucion'.")
+                print("[ERROR] Opción no válida. Por ahora sólo 'devolucion'.")
+                self._mostrar_error_entrada()
                 self._print_prompt()
 
         elif self.state == ST.DEV_MENU:
@@ -353,6 +370,8 @@ class GestorAplicacion:
             elif v == "ninguno":
                 self._enqueue_and_play(["resp2","resp3"], ST.RESP3_NINGUNO)
             else:
+                print("[ERROR] Opción no válida. Escribe: producto | ninguno")
+                self._mostrar_error_entrada()
                 self._print_prompt()
 
         elif self.state == ST.DEV_REASON:
@@ -360,6 +379,8 @@ class GestorAplicacion:
                 self.context["razon"] = v
                 self._enqueue_and_play(["resp9"], ST.ASK_TICKET_YN)
             else:
+                print("[ERROR] Razón no válida. Opciones: danado | defecto | equivocacion")
+                self._mostrar_error_entrada()
                 self._print_prompt()
 
         elif self.state == ST.ASK_TICKET_YN:
@@ -368,6 +389,8 @@ class GestorAplicacion:
             elif _no(v):
                 self._enqueue_and_play(["resp6","resp3"], ST.RESP3_NO_TICKET)
             else:
+                print("[ERROR] Respuesta no válida. Responde: si | no")
+                self._mostrar_error_entrada()
                 self._print_prompt()
 
         elif self.state == ST.MORE_PRODUCT:
@@ -376,9 +399,9 @@ class GestorAplicacion:
                 if bundle and isinstance(self.ventana_actual, VentanaInteraccion):
                     texto = render_ticket_text(bundle)
                     print("\n=== INFORMACIÓN DEL TICKET (para seleccionar otro) ===")
-                    print(texto); print("======================================================\n")
+                    print(texto)
+                    print("======================================================\n")
                     self._bloquear(True)
-                    # Mostrar de nuevo el ticket 10 s mientras NO hay video
                     self.ventana_actual.mostrar_overlay_texto(
                         texto, ms=10_000,
                         on_done=lambda: (self._bloquear(False), self._set_state(ST.WAIT_PRODUCT))
@@ -386,8 +409,20 @@ class GestorAplicacion:
                 else:
                     self._set_state(ST.WAIT_PRODUCT)
             elif _no(v):
-                self._enqueue_and_play(["resp4","resp8","resp3","resp5"], ST.SURVEY)
+                self._enqueue_and_play(["resp4","resp8","resp3"], ST.RESP3_MAIN)
             else:
+                print("[ERROR] Respuesta no válida. Responde: si | no")
+                self._mostrar_error_entrada()
+                self._print_prompt()
+
+        elif self.state == ST.RESP3_MAIN:
+            if _yes(v):
+                self._enqueue_and_play(["resp1"], ST.MAIN)
+            elif _no(v):
+                self._enqueue_and_play(["resp5"], ST.SURVEY)
+            else:
+                print("[ERROR] Respuesta no válida. Responde: si | no")
+                self._mostrar_error_entrada()
                 self._print_prompt()
 
         elif self.state == ST.RESP3_NINGUNO:
@@ -396,30 +431,34 @@ class GestorAplicacion:
             elif _no(v):
                 self._enqueue_and_play(["resp4","resp5"], ST.SURVEY)
             else:
+                print("[ERROR] Respuesta no válida. Responde: si | no")
+                self._mostrar_error_entrada()
                 self._print_prompt()
 
         elif self.state == ST.RESP3_NO_TICKET:
             if _no(v):
                 self._enqueue_and_play(["resp4","resp5"], ST.SURVEY)
             else:
-                print("Para este flujo, responde 'no'."); self._print_prompt()
+                print("[ERROR] Para este flujo, responde 'no'.")
+                self._mostrar_error_entrada()
+                self._print_prompt()
 
         else:
             self._set_state(ST.MAIN)
 
-    # ---------- handlers numéricos ----------
     def _handle_ticket_number(self, num: int):
-        """Consulta BD, muestra overlay 10s y pasa a WAIT_PRODUCT."""
         try:
             bundle = fetch_ticket_bundle(num)
         except Exception as e:
             print(f"[DB] Error al consultar ticket {num}: {e}")
             traceback.print_exc()
+            self._mostrar_error_entrada()
             self._print_prompt()
             return
 
         if not bundle:
-            print(f"No existe el ticket {num}. Intenta de nuevo.")
+            print(f"[ERROR] No existe el ticket {num}. Intenta de nuevo.")
+            self._mostrar_error_entrada()
             self._print_prompt()
             return
 
@@ -428,23 +467,20 @@ class GestorAplicacion:
         print(texto)
         print("==============================\n")
 
-        # Almacenamos el ticket para usarlo en los siguientes pasos
         self.context["ticket_num"] = num
         self.context["ticket_bundle"] = bundle
 
-        # Garantiza Interacción visible y NO video (vamos a mostrar overlay de texto)
         if not isinstance(self.ventana_actual, VentanaInteraccion):
-            # Montamos Interacción con la última RESP de ese paso para mantener look&feel
             src = self.mapa.get("resp10")
             win = VentanaInteraccion(src)
             self._safe_disconnect_all(win)
             self._hook_interaccion(win)
             self._swap(win)
-            # No estamos reproduciendo ahora un video nuevo -> modo normal
-            try: win.set_modo_reproduccion(False)
-            except: pass
+            try:
+                win.set_modo_reproduccion(False)
+            except:
+                pass
 
-        # Mostrar overlay 10 s y luego pedir producto
         self._bloquear(True)
         self.ventana_actual.mostrar_overlay_texto(
             render_ticket_text(bundle), ms=10_000,
@@ -452,10 +488,50 @@ class GestorAplicacion:
         )
 
     def _handle_product_number(self, prod: int):
+        bundle = self.context.get("ticket_bundle")
+        if not bundle:
+            print(f"[ERROR] No hay ticket cargado.")
+            self._mostrar_error_entrada()
+            self._print_prompt()
+            return
+        
+        # Validar que el producto existe en el ticket
+        productos_ids = [p["id"] for p in bundle.get("productos", [])]
+        if prod not in productos_ids:
+            print(f"[ERROR] El producto {prod} no existe en este ticket.")
+            print(f"Productos disponibles: {productos_ids}")
+            self._mostrar_error_entrada()
+            self._print_prompt()
+            return
+        
         self.context["productos"].append(prod)
+        print(f"[OK] Producto {prod} agregado correctamente")
         self._enqueue_and_play(["resp7"], ST.MORE_PRODUCT)
 
-    # ---------- arranque ----------
+    def _mostrar_resumen_y_finalizar(self):
+        print("\n╔════════════════════════════════════════════════════════╗")
+        print("║          RESUMEN DE INTERACCIÓN                        ║")
+        print("╚════════════════════════════════════════════════════════╝")
+        print(f"  Rama:      {self.context.get('branch', 'N/A')}")
+        print(f"  Razón:     {self.context.get('razon', 'N/A')}")
+        print(f"  Ticket:    {self.context.get('ticket_num', 'N/A')}")
+        print(f"  Productos: {self.context.get('productos', [])}")
+        print(f"  Encuesta:  {self.context.get('survey', 'N/A')}/5")
+        print("╚════════════════════════════════════════════════════════╝\n")
+        print("¡Gracias por utilizar nuestro sistema!")
+        print("La interacción ha finalizado.\n")
+        print("Iniciando nueva interacción...\n")
+        
+        self.context = {
+            "branch": None,
+            "razon": None,
+            "ticket_num": None,
+            "ticket_bundle": None,
+            "productos": [],
+            "survey": None
+        }
+        self._enqueue_and_play(["resp1"], ST.MAIN)
+
     def mostrar_bienvenida(self):
         dest = self.dir_videos / "bienvenida.mp4"
         if not dest.is_file():
@@ -465,7 +541,8 @@ class GestorAplicacion:
                     r.raise_for_status()
                     with open(dest, "wb") as f:
                         for chunk in r.iter_content(1<<20):
-                            if chunk: f.write(chunk)
+                            if chunk:
+                                f.write(chunk)
                 print("[OK]", dest)
             except Exception as e:
                 print("[ERR] No se pudo preparar bienvenida:", e)
@@ -476,7 +553,6 @@ class GestorAplicacion:
         self._swap(win)
 
     def _after_bienvenida(self):
-        # RESP1 en Interacción y luego queda en MAIN para empezar a escribir
         src = self.mapa.get("resp1")
         win = VentanaInteraccion(src)
         self._safe_disconnect_all(win)
