@@ -4,20 +4,25 @@ import re, cv2, hashlib, requests
 from pathlib import Path
 from typing import Optional, Callable
 
-from PyQt5.QtWidgets import QMainWindow, QFrame, QLabel
-from PyQt5.QtGui import QPixmap, QImage, QFont
+from PyQt5.QtWidgets import QMainWindow, QFrame, QLabel, QGraphicsDropShadowEffect
+from PyQt5.QtGui import QPixmap, QImage, QFont, QColor
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QRect
 
 from public.views.hilo_video import HiloVideo
 from public.views.config.mapa_interaccion import FILE_IDS
+try:
+    from public.views.config.drive_config import drive_api_url
+except ImportError:
+    def drive_api_url(file_id): return f"https://mock.drive.api/{file_id}"
 
-# Coincide con las URLs de la Drive API: https://www.googleapis.com/drive/v3/files/<ID>?alt=media&key=...
+
+# Coincide con las URLs de la Drive API
 _DRIVE_RE = re.compile(r"https://www\.googleapis\.com/drive/v3/files/([^?]+)")
 
 class VentanaInteraccion(QMainWindow):
     redimensionada = pyqtSignal()
-    video_terminado = pyqtSignal()  # desbloquea consola tras RESP
-    gesto_detectado = pyqtSignal(str)  # NUEVA señal para gestos detectados
+    video_terminado = pyqtSignal()
+    gesto_detectado = pyqtSignal(str)
 
     def __init__(self, src_inicial: Optional[str] = None):
         super().__init__()
@@ -25,13 +30,36 @@ class VentanaInteraccion(QMainWindow):
         self.resize(1280, 720)
 
         # Paths
-        self.dir_public = Path(__file__).resolve().parents[2]   # .../public
+        # __file__ = public/views/formatos/interaccion.py
+        # Root = TT-2025-B004
+        self.dir_root = Path(__file__).resolve().parents[3]
+        self.dir_public = self.dir_root / "public"
+        self.dir_backend = self.dir_root / "backend" 
+        
         self.dir_videos = self.dir_public / "videos"
         self.dir_videos.mkdir(parents=True, exist_ok=True)
         
-        # Configurar imagen de fondo
-        self.dir_images = self.dir_public / "images"
+        self.dir_images = self.dir_public / "images" 
+        self.dir_images.mkdir(parents=True, exist_ok=True)
+        
+        # --- DEBUG AL INICIAR ---
+        # Imprimimos qué archivos ve Python realmente en backend/productos
+        print(f"[INIT] Raíz del proyecto: {self.dir_root}")
+        print("[INIT] Escaneando backend/productos para verificar visibilidad:")
+        try:
+            prod_dir = self.dir_backend / "productos"
+            if prod_dir.exists():
+                for f in prod_dir.glob("*"):
+                    print(f"   -> Veo archivo: {f.name}")
+            else:
+                print(f"   [ALERTA] No encuentro la carpeta {prod_dir}")
+        except Exception as e:
+            print(f"   [ERROR] Al escanear: {e}")
+        # ------------------------
+
         fondo_path = self.dir_images / "fondo.png"
+        
+        # Configurar imagen de fondo
         if fondo_path.exists():
             self.setStyleSheet(f"""
                 QMainWindow {{
@@ -42,29 +70,24 @@ class VentanaInteraccion(QMainWindow):
                 }}
             """)
         else:
-            print(f"[WARNING] No se encontró la imagen de fondo en: {fondo_path}")
             self.setStyleSheet("QMainWindow { background: #2c3e50; }")
 
-        # --- Barra superior con IMAGEN (barra.png) ---
+        # --- Barra superior ---
         self.barra = QLabel(self)
         self.barra.setObjectName("barraSuperior")
-        self.barra.setScaledContents(False)  # usamos 'cover' manual, no auto-escalado completo
+        self.barra.setScaledContents(False)
         self.barra_pix_original: Optional[QPixmap] = None
 
         barra_path = self.dir_images / "barra.png"
         if barra_path.exists():
             try:
-                # Cargamos la imagen base de la barra
                 self.barra_pix_original = QPixmap(str(barra_path).replace("\\", "/"))
             except Exception as e:
-                print(f"[UI] Error cargando barra.png: {e}")
                 self.barra_pix_original = None
 
         if not self.barra_pix_original or self.barra_pix_original.isNull():
-            # Fallback: color sólido guinda si no hay imagen
             self.barra.setStyleSheet("background: #8B1538; border-radius: 0px;")
         else:
-            # Fondo transparente: solo se verá la imagen
             self.barra.setStyleSheet("background: transparent;")
 
         self.titulo = QLabel("TT 2025-B004", self)
@@ -72,7 +95,7 @@ class VentanaInteraccion(QMainWindow):
         self.titulo.setStyleSheet("color: white; letter-spacing: 3px;")
         self.titulo.setFont(QFont("Arial Black", 24, QFont.Bold))
 
-        # --- Recuadro cámara (izq) - MARCOS LIMPIOS ---
+        # --- Recuadro cámara (izq) ---
         self.recuadro_cam = QFrame(self)
         self.recuadro_cam.setStyleSheet("""
             QFrame {
@@ -91,8 +114,9 @@ class VentanaInteraccion(QMainWindow):
                 border-radius: 12px;
             }
         """)
+        self.view_cam.setText("Cámara activa")
 
-        # --- Recuadro video RESP (der) - MARCOS LIMPIOS ---
+        # --- Recuadro video RESP (der) ---
         self.recuadro_vid = QFrame(self)
         self.recuadro_vid.setStyleSheet("""
             QFrame {
@@ -111,8 +135,9 @@ class VentanaInteraccion(QMainWindow):
                 border-radius: 12px;
             }
         """)
+        self.view_vid.setText("Video")
 
-        # --- Banner ROJO bajo el área de video (solo durante reproducción) ---
+        # --- Banner ROJO ---
         self.banner_rojo = QFrame(self)
         self.banner_rojo.setStyleSheet("background: #c0392b; border-radius: 12px; border: none;")
         self.banner_rojo_lbl = QLabel("⚠️  POR FAVOR, ESPERE PARA CAPTURAR SU RESPUESTA  ⚠️", self.banner_rojo)
@@ -122,7 +147,7 @@ class VentanaInteraccion(QMainWindow):
         )
         self.banner_rojo.hide()
 
-        # --- Banner VERDE bajo el área de video (cuando puede capturar respuesta) ---
+        # --- Banner VERDE ---
         self.banner_verde = QFrame(self)
         self.banner_verde.setStyleSheet("background: #27ae60; border-radius: 12px; border: none;")
         self.banner_verde_lbl = QLabel("✓  CAPTURE SU RESPUESTA  ✓", self.banner_verde)
@@ -132,7 +157,7 @@ class VentanaInteraccion(QMainWindow):
         )
         self.banner_verde.hide()
 
-        # --- NUEVA: Ventana flotante para respuesta no capturada ---
+        # --- Ventana flotante de error ---
         self.ventana_error = QFrame(self)
         self.ventana_error.setStyleSheet("""
             QFrame {
@@ -160,45 +185,84 @@ class VentanaInteraccion(QMainWindow):
         self._error_timer.setSingleShot(True)
         self._error_timer.timeout.connect(self._cerrar_ventana_error)
 
-        # --- Overlay para mostrar texto (ticket, etc.) sobre el área del video ---
+        # --- Overlay MEJORADO ---
         self.overlay = QFrame(self.recuadro_vid)
         self.overlay.setStyleSheet("""
             QFrame {
-                background: rgba(255, 255, 255, 235);
-                border: 3px solid #e7c14d;
+                background: rgba(15, 15, 15, 255); 
+                border: 2px solid #e7c14d;
                 border-radius: 15px;
             }
         """)
         self.overlay.hide()
+        
+        # Cronómetro
+        self.lbl_cronometro = QLabel("5s", self.overlay)
+        self.lbl_cronometro.setAlignment(Qt.AlignCenter)
+        self.lbl_cronometro.setStyleSheet("""
+            QLabel {
+                background-color: #f1c40f; 
+                color: #2c3e50;
+                font-family: 'Arial';
+                font-size: 18px;
+                font-weight: 900;
+                border-radius: 20px; 
+                padding: 5px 15px;
+                border: 2px solid #f39c12;
+            }
+        """)
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(15)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        shadow.setOffset(0, 4)
+        self.lbl_cronometro.setGraphicsEffect(shadow)
+        
+        # Imagen del producto
+        self.lbl_producto_img = QLabel(self.overlay)
+        self.lbl_producto_img.setAlignment(Qt.AlignCenter)
+        self.lbl_producto_img.setScaledContents(True) 
+        self.lbl_producto_img.setStyleSheet("""
+            QLabel {
+                background: transparent;
+                border: none;
+                color: white;
+                font-size: 14px;
+            }
+        """)
+        self.lbl_producto_img.setText("IMAGEN NO CARGADA")
+        self.lbl_producto_img.hide()
+        
+        # Texto del ticket
         self.lbl_overlay = QLabel(self.overlay)
         self.lbl_overlay.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.lbl_overlay.setWordWrap(True)
-        self.lbl_overlay.setStyleSheet("color: #2c3e50; padding: 12px; border: none;")
-        self.lbl_overlay.setFont(QFont("Segoe UI", 11))
+        self.lbl_overlay.setStyleSheet(self._get_overlay_style(font_size=15))
+        
         self._overlay_timer = QTimer(self)
         self._overlay_timer.setSingleShot(True)
         self._overlay_cb: Optional[Callable[[], None]] = None
         self._overlay_timer.timeout.connect(self._cerrar_overlay)
+        
+        self._cronometro_timer = QTimer(self)
+        self._cronometro_timer.timeout.connect(self._actualizar_cronometro)
+        self._tiempo_restante = 0
 
         # --- Cámara ---
         self.cap_cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         if not self.cap_cam.isOpened():
-            # Intentar sin DSHOW
             self.cap_cam = cv2.VideoCapture(0)
             
         self.timer_cam = QTimer(self)
         self.timer_cam.timeout.connect(self._tick_cam)
         self.timer_cam.start(30)
 
-        # --- Video RESP (OpenCV + hilo) ---
         self.cap_resp = None
         self.hilo_resp: Optional[HiloVideo] = None
 
-        # --- Inferencia de gestos ---
+        # --- Inferencia ---
         self.inferencia = None
-        self.modo_gestos = False  # Controla si estamos en modo detección de gestos
+        self.modo_gestos = False
         
-        # Label para mostrar estado de gestos
         self.label_estado_gestos = QLabel(self.recuadro_cam)
         self.label_estado_gestos.setAlignment(Qt.AlignCenter)
         self.label_estado_gestos.setStyleSheet("""
@@ -213,39 +277,42 @@ class VentanaInteraccion(QMainWindow):
         """)
         self.label_estado_gestos.hide()
         
-        # Inicializar inferencia de gestos
         self._inicializar_inferencia_gestos()
 
-        # Estado de layout
-        self._modo_reproduccion = False  # True => cámara pequeña + banner rojo ON
-
-        # Layout inicial
+        self._modo_reproduccion = False
         self._recolocar()
         self.redimensionada.connect(self._recolocar)
 
         if src_inicial:
-            # Iniciar con RESP1 ya respetando modo reproducción
             self.set_modo_reproduccion(True)
             self.cambiar_video_unidad(src_inicial, nombre_resp="resp1")
 
+    def _get_overlay_style(self, font_size=15):
+        return f"""
+            QLabel {{
+                color: #ecf0f1;
+                padding: 10px;
+                border: none;
+                font-family: 'Consolas', monospace;
+                font-size: {font_size}px;
+                font-weight: bold;
+                background: transparent;
+            }}
+        """
+
     def mostrar_error_captura(self):
-        """Muestra la ventana flotante de error por 5 segundos"""
         try:
             self._recolocar_ventana_error()
             self.ventana_error.show()
-            self.ventana_error.raise_()  # Traer al frente
-            self._error_timer.start(5000)  # 5 segundos
-            print("[UI] Mostrando mensaje de error de captura")
+            self.ventana_error.raise_()
+            self._error_timer.start(5000)
         except Exception as e:
-            print(f"[UI] Error al mostrar ventana de error: {e}")
+            pass
 
     def _cerrar_ventana_error(self):
-        """Cierra la ventana flotante de error"""
         self.ventana_error.hide()
-        print("[UI] Ventana de error cerrada")
 
     def _recolocar_ventana_error(self):
-        """Recoloca la ventana de error en el centro de la pantalla"""
         error_width = 450
         error_height = 150
         x = (self.width() - error_width) // 2
@@ -253,53 +320,48 @@ class VentanaInteraccion(QMainWindow):
         self.ventana_error.setGeometry(x, y, error_width, error_height)
         self.lbl_error.setGeometry(0, 0, error_width, error_height)
 
+    def _actualizar_cronometro(self):
+        if self._tiempo_restante > 0:
+            self._tiempo_restante -= 1
+            self.lbl_cronometro.setText(f"⏱ {self._tiempo_restante}s")
+        else:
+            self._cronometro_timer.stop()
+
     def set_modo_gestos(self, activar: bool):
-        """Activa/desactiva el modo de detección de gestos"""
         self.modo_gestos = activar
         if activar:
-            print("[GESTOS] Modo gestos activado")
             self.label_estado_gestos.show()
             self._actualizar_estado_gestos("🟢 LISTO - Mostrando manos", "#27ae60")
         else:
-            print("[GESTOS] Modo gestos desactivado")
             self.label_estado_gestos.hide()
     
     def _inicializar_inferencia_gestos(self):
-        """Inicializa el módulo de inferencia desde el backend"""
         try:
-            # Nueva ruta del modelo en backend
-            modelo_path = Path(__file__).resolve().parents[3] / "backend" / "modelo.pkl"
-            print(f"[GESTOS] Buscando modelo en: {modelo_path}")
+            modelo_path = self.dir_root / "backend" / "modelo.pkl"
             
-            # Importar desde el backend
             from backend.inferencia import InferenciaGestos
             
             if modelo_path.exists():
                 self.inferencia = InferenciaGestos(str(modelo_path))
-                print("[GESTOS] Modelo cargado desde backend")
             else:
-                print("[GESTOS] Modelo no encontrado en backend, usando modo simulación")
                 self.inferencia = InferenciaGestos()
                     
             self.inferencia.inicializar_deteccion()
             self.inferencia.set_callback_prediccion(self._on_gesto_detectado)
-            print("[GESTOS] Inferencia inicializada desde backend")
                     
-        except Exception as e:
-            print(f"[GESTOS] Error inicializando inferencia: {e}")
-            # Fallback básico
-            self.inferencia = type('InferenciaSimulada', (), {})()
-            self.inferencia.procesar_frame = lambda frame: (cv2.flip(frame, 1), "Simulación", 0.0, "SIMULACION")
-            self.inferencia.set_callback_prediccion = lambda cb: setattr(self.inferencia, 'callback_prediccion', cb)
-            self.inferencia.liberar = lambda: None
+        except Exception:
+            class InferenciaSimulada:
+                def __init__(self, *args): pass
+                def inicializar_deteccion(self): pass
+                def set_callback_prediccion(self, cb): pass
+                def procesar_frame(self, frame): return (cv2.flip(frame, 1), "Simulación", 0.0, "SIMULACION")
+                def liberar(self): pass
+            self.inferencia = InferenciaSimulada()
 
     def _on_gesto_detectado(self, gesto: str):
-        """Callback cuando se detecta un gesto"""
-        print(f"[GESTOS] Gesto detectado: {gesto}")
         self.gesto_detectado.emit(gesto)
 
     def _actualizar_estado_gestos(self, mensaje: str, color: str = "#3498db"):
-        """Actualiza el label de estado de gestos"""
         self.label_estado_gestos.setText(mensaje)
         self.label_estado_gestos.setStyleSheet(f"""
             QLabel {{
@@ -312,11 +374,9 @@ class VentanaInteraccion(QMainWindow):
                 border: none;
             }}
         """)
-        # Recolocar el label
         self._recolocar_estado_gestos()
 
     def _recolocar_estado_gestos(self):
-        """Recoloca el label de estado de gestos en la esquina inferior"""
         if self.label_estado_gestos.isVisible():
             label_width = 300
             label_height = 40
@@ -324,59 +384,41 @@ class VentanaInteraccion(QMainWindow):
             y = self.recuadro_cam.height() - label_height - 15
             self.label_estado_gestos.setGeometry(x, y, label_width, label_height)
 
-    # =================== Cámara (con detección de gestos) ===================
     def _tick_cam(self):
         if not self.cap_cam or not self.cap_cam.isOpened():
-            self.view_cam.setText("CÁMARA NO DISPONIBLE\n\nVerifique que:\n• La cámara esté conectada\n• No esté en uso por otra aplicación\n• Los drivers estén instalados")
+            self.view_cam.setText("CÁMARA NO DISPONIBLE\n\nVerifique conexión")
             return
             
-        ok, frame = self.cap_cam.read()
-        if not ok:
-            self.view_cam.setText("ERROR LEYENDO CÁMARA\n\nReinicie la aplicación")
-            return
-            
-        # Procesar frame para detección de gestos si está activo el modo
-        frame_procesado = frame
-        if self.modo_gestos and self.inferencia:
-            try:
-                frame_procesado, pred, conf, estado = self.inferencia.procesar_frame(frame)
-                
-                # Actualizar estado visual
-                if estado == "GRABANDO":
-                    self._actualizar_estado_gestos("GRABANDO gesto...", "#e67e22")
-                elif estado == "RECONOCIDO":
-                    self._actualizar_estado_gestos(f"Reconocido: {pred}", "#27ae60")
-                elif estado == "LISTO":
-                    self._actualizar_estado_gestos("Mueve la mano", "#3498db")
-                elif estado == "ESPERANDO":
-                    self._actualizar_estado_gestos("Acerca tu mano", "#95a5a6")
-                elif estado == "MANO_DETECTADA":
-                    self._actualizar_estado_gestos("Mano detectada", "#9b59b6")
-                elif estado == "SIMULACION":
-                    self._actualizar_estado_gestos("Modo simulación", "#e67e22")
-                elif estado == "ERROR":
-                    self._actualizar_estado_gestos("Error detección", "#e74c3c")
-                else:
-                    self._actualizar_estado_gestos(f"{estado}", "#f39c12")
-                    
-            except Exception as e:
-                print(f"[GESTOS] Error procesando frame: {e}")
-                frame_procesado = cv2.flip(frame, 1)  # fallback a espejo normal
-                self._actualizar_estado_gestos("Error procesando", "#e74c3c")
-        else:
-            frame_procesado = cv2.flip(frame, 1)  # espejo en cámara normal
-            if self.modo_gestos:
-                self._actualizar_estado_gestos("Gestos pausados", "#7f8c8d")
-
-        # Convertir y mostrar el frame
         try:
-            rgb = cv2.cvtColor(frame_procesado, cv2.COLOR_BGR2RGB)
-            h, w, ch = rgb.shape
+            ok, frame = self.cap_cam.read()
+            if not ok:
+                return
+                
+            frame_procesado = frame
+            if self.modo_gestos and self.inferencia:
+                try:
+                    frame_procesado, pred, conf, estado = self.inferencia.procesar_frame(frame)
+                    
+                    color_map = {
+                        "GRABANDO": "#e67e22", "RECONOCIDO": "#27ae60", "LISTO": "#3498db",
+                        "ESPERANDO": "#95a5a6", "MANO_DETECTADA": "#9b59b6", "SIMULACION": "#e67e22",
+                        "ERROR": "#e74c3c"
+                    }
+                    color = color_map.get(estado, "#f39c12")
+                    self._actualizar_estado_gestos(f"{estado} {pred}", color)
+                        
+                except Exception as e:
+                    frame_procesado = cv2.flip(frame, 1)
+                    self._actualizar_estado_gestos("Error procesando", "#e74c3c")
+            else:
+                frame_procesado = cv2.flip(frame, 1)
+
+            rgb_image = cv2.cvtColor(frame_procesado, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb_image.shape
             bytes_per_line = ch * w
             
-            qimg = QImage(rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            qimg = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
             
-            # Escalar manteniendo aspect ratio
             if self.view_cam.width() > 0 and self.view_cam.height() > 0:
                 pixmap = QPixmap.fromImage(qimg)
                 scaled_pixmap = pixmap.scaled(
@@ -387,18 +429,12 @@ class VentanaInteraccion(QMainWindow):
             else:
                 self.view_cam.setPixmap(QPixmap.fromImage(qimg))
                 
-        except Exception as e:
-            print(f"[CAMARA] Error mostrando frame: {e}")
-            self.view_cam.setText("Error mostrando video")
+        except Exception:
+            pass
 
-    # =================== RESP (sin espejo) ===================
     def cambiar_video_unidad(self, src: Optional[str], nombre_resp: Optional[str] = None):
-        """Abre/descarga el video; si es URL lo guarda con nombre canónico si aplica."""
-        # Oculta overlay si estuviera activo
-        self._overlay_timer.stop()
-        self.overlay.hide()
+        self._cerrar_overlay() 
 
-        # Limpia vídeo anterior
         try:
             if self.hilo_resp:
                 self.hilo_resp.stop()
@@ -428,7 +464,6 @@ class VentanaInteraccion(QMainWindow):
             QTimer.singleShot(10, self._emitir_terminado)
             return
 
-        # Ya que vamos a reproducir, aseguramos modo reproducción
         self.set_modo_reproduccion(True)
 
         self.hilo_resp = HiloVideo(self.cap_resp, bucle=False, mirror=False)
@@ -445,7 +480,6 @@ class VentanaInteraccion(QMainWindow):
             self.view_vid.setPixmap(pix)
 
     def _on_video_end(self):
-        # Apagamos modo reproducción y emitimos terminado
         self.set_modo_reproduccion(False)
         self._emitir_terminado()
 
@@ -455,47 +489,98 @@ class VentanaInteraccion(QMainWindow):
         except Exception:
             pass
 
-    # =================== Overlay: texto de ticket ===================
-    def mostrar_overlay_texto(self, texto: str, ms: int = 10_000, on_done: Optional[Callable[[], None]] = None):
+    def mostrar_overlay_texto(self, texto: str, ms: int = 10_000, on_done: Optional[Callable[[], None]] = None, producto_data: Optional[dict] = None):
         """
-        Muestra 'texto' sobre el recuadro de video durante 'ms' ms.
-        Llama on_done() al finalizar. No bloquea la UI.
-        (Se muestra en modo NORMAL, no en reproducción de video)
+        Muestra texto e imagen.
+        USA BÚSQUEDA RECURSIVA PARA ENCONTRAR LA IMAGEN SI LA RUTA FALLA.
         """
         try:
             self.lbl_overlay.setText(texto)
-            self._recolocar_overlay()
+            
+            is_product_mode = producto_data is not None and 'imagen' in producto_data and producto_data['imagen']
+            
+            if is_product_mode:
+                raw_path = str(producto_data['imagen'])
+                # Extraemos solo el nombre (ej. "tv_led_50.png")
+                fname = Path(raw_path).name
+                
+                final_path = None
+                
+                # ESTRATEGIA: Buscar el archivo recursivamente donde sea que esté
+                print(f"\n[DEBUG IMAGEN] Buscando archivo '{fname}' en el sistema...")
+                
+                # 1. Buscar recursivamente en BACKEND (Prioridad)
+                try:
+                    encontrados = list(self.dir_backend.rglob(fname))
+                    if encontrados:
+                        final_path = encontrados[0]
+                        print(f"   -> Encontrado en Backend: {final_path}")
+                except Exception: pass
+                
+                # 2. Si no, buscar recursivamente en PUBLIC
+                if not final_path:
+                    try:
+                        encontrados = list(self.dir_public.rglob(fname))
+                        if encontrados:
+                            final_path = encontrados[0]
+                            print(f"   -> Encontrado en Public: {final_path}")
+                    except Exception: pass
+                
+                if final_path:
+                    pix = QPixmap(str(final_path))
+                    if not pix.isNull():
+                        self.lbl_producto_img.setPixmap(pix)
+                        self.lbl_producto_img.setText("") 
+                        self.lbl_producto_img.show()
+                    else:
+                        self.lbl_producto_img.setText(f"ERROR: Archivo dañado\n{final_path.name}")
+                        self.lbl_producto_img.show()
+                else:
+                    self.lbl_producto_img.setText(f"NO ENCONTRADO:\n{fname}\n(Búsqueda recursiva falló)")
+                    self.lbl_producto_img.show()
+            else:
+                self.lbl_producto_img.hide()
+                self.lbl_producto_img.setText("IMAGEN NO CARGADA")
+
+            font_size = 24 if is_product_mode else 15
+            self.lbl_overlay.setStyleSheet(self._get_overlay_style(font_size=font_size))
+
+            self._recolocar_overlay(is_product_mode=is_product_mode)
+            
+            self._tiempo_restante = ms // 1000
+            self.lbl_cronometro.setText(f"⏱ {self._tiempo_restante}s")
+            self._cronometro_timer.start(1000)
+            
             self.overlay.show()
+            self.lbl_cronometro.show()
+            self.overlay.raise_()
+            
             self._overlay_cb = on_done
             self._overlay_timer.start(max(1, int(ms)))
         except Exception as e:
-            print("[Overlay] Error al mostrar:", e)
+            print(f"Error mostrando overlay: {e}")
             self.overlay.hide()
             if callable(on_done):
                 on_done()
 
     def _cerrar_overlay(self):
+        self._cronometro_timer.stop()
         self.overlay.hide()
+        self.lbl_producto_img.hide()
         cb = self._overlay_cb
         self._overlay_cb = None
         if callable(cb):
-            try:
-                cb()
-            except Exception as e:
-                print("[Overlay] callback error:", e)
+            try: cb()
+            except Exception as e: print("[Overlay] callback error:", e)
 
-    # =================== Descarga local ===================
     def _asegurar_local(self, src: str, nombre_resp: Optional[str]) -> Optional[str]:
-        """Descarga si es URL; intenta guardar como respX.mp4 si reconoce el ID."""
         if not (src.startswith("http://") or src.startswith("https://")):
             return str(Path(src)) if Path(src).is_file() else None
 
-        # nombre canónico si viene (respX)
         fname = None
         if nombre_resp and re.fullmatch(r"resp\d{1,2}", nombre_resp):
             fname = f"{nombre_resp}.mp4"
         else:
-            # mapear file_id -> respX
             m = _DRIVE_RE.match(src)
             if m:
                 file_id = m.group(1)
@@ -520,23 +605,15 @@ class VentanaInteraccion(QMainWindow):
                             f.write(chunk)
             return str(destino)
         except Exception as e:
-            print("Error descargando:", e)
             if destino.exists():
                 destino.unlink(missing_ok=True)
             return None
 
-    # =================== Layout / Redimensionamiento ===================
     def set_modo_reproduccion(self, on: bool):
-        """
-        True  => reduce cámara, muestra banner ROJO (espera) y oculta banner VERDE.
-        False => cámara grande normal, oculta banner ROJO y muestra banner VERDE.
-        """
         self._modo_reproduccion = bool(on)
-        # Banner rojo visible solo mientras se reproduce video
         self.banner_rojo.setVisible(self._modo_reproduccion)
-        # Banner verde visible cuando NO se reproduce video (puede capturar)
         self.banner_verde.setVisible(not self._modo_reproduccion)
-        self._recolocar()  # reacomoda tamaños
+        self._recolocar()
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -548,16 +625,12 @@ class VentanaInteraccion(QMainWindow):
         self.barra.setGeometry(0, 0, W, barra_h)
         self.titulo.setGeometry(0, 0, W, barra_h)
 
-        # Actualizar imagen de la barra para que cubra toda el área
         self._actualizar_barra_pixmap()
 
         margen_lateral = 60
         gap = 40
         alto_panel = int(H * 0.55)
 
-        # Distribución dinámica:
-        # - Normal: 50% cámara / 50% video
-        # - Reproducción: cámara 35% / video 65%
         if self._modo_reproduccion:
             frac_cam = 0.35
             frac_vid = 0.65
@@ -569,46 +642,38 @@ class VentanaInteraccion(QMainWindow):
         ancho_cam = int(ancho_total * frac_cam)
         ancho_vid = int(ancho_total * frac_vid)
 
-        # Cámara (izquierda)
         x_cam = margen_lateral
         y_pan = barra_h + 60
         self.recuadro_cam.setGeometry(x_cam, y_pan, ancho_cam, alto_panel)
-        # El view_cam con margen interno para crear el efecto limpio
         self.view_cam.setGeometry(8, 8, ancho_cam - 16, alto_panel - 16)
 
-        # Video (derecha)
         x_vid = x_cam + ancho_cam + gap
         self.recuadro_vid.setGeometry(x_vid, y_pan, ancho_vid, alto_panel)
-        # El view_vid con margen interno para crear el efecto limpio
         self.view_vid.setGeometry(8, 8, ancho_vid - 16, alto_panel - 16)
 
-        # Banners (debajo del video, mismo ancho)
         banner_h = 42
         banner_y = y_pan + alto_panel + 16
         
-        # Banner ROJO (espera)
         self.banner_rojo.setGeometry(x_vid, banner_y, ancho_vid, banner_h)
         self.banner_rojo_lbl.setGeometry(0, 0, ancho_vid, banner_h)
         
-        # Banner VERDE (capture respuesta)
         self.banner_verde.setGeometry(x_vid, banner_y, ancho_vid, banner_h)
         self.banner_verde_lbl.setGeometry(0, 0, ancho_vid, banner_h)
 
-        # Recoloca overlay para que siga al recuadro de video
-        self._recolocar_overlay()
+        # Verificacion segura
+        has_pixmap = (self.lbl_producto_img.pixmap() is not None and not self.lbl_producto_img.pixmap().isNull())
+        has_error_txt = "NO ENCONTRADO" in self.lbl_producto_img.text() or "IMAGEN NO" in self.lbl_producto_img.text() or "ERROR" in self.lbl_producto_img.text()
         
-        # Recolocar estado de gestos
+        is_prod_mode = self.lbl_producto_img.isVisible() and (has_pixmap or has_error_txt)
+        
+        self._recolocar_overlay(is_product_mode=is_prod_mode)
+        
         self._recolocar_estado_gestos()
         
-        # Recolocar ventana de error
         if self.ventana_error.isVisible():
             self._recolocar_ventana_error()
 
     def _actualizar_barra_pixmap(self):
-        """
-        Escala la imagen de la barra para que cubra todo el área
-        (comportamiento tipo 'background-size: cover').
-        """
         if not self.barra_pix_original or self.barra_pix_original.isNull():
             return
 
@@ -617,7 +682,6 @@ class VentanaInteraccion(QMainWindow):
         if w <= 0 or h <= 0:
             return
 
-        # KeepAspectRatioByExpanding => cubre todo el área, recortando si es necesario
         scaled = self.barra_pix_original.scaled(
             w, h,
             Qt.KeepAspectRatioByExpanding,
@@ -625,44 +689,64 @@ class VentanaInteraccion(QMainWindow):
         )
         self.barra.setPixmap(scaled)
 
-    def _recolocar_overlay(self):
-        # Overlay ocupa ~90% del recuadro de video
-        w = self.recuadro_vid.width() - 40
-        h = self.recuadro_vid.height() - 40
-        self.overlay.setGeometry(20, 20, w, h)
-        self.lbl_overlay.setGeometry(12, 12, w - 24, h - 24)
+    def _recolocar_overlay(self, is_product_mode: bool = False):
+        w_overlay = self.recuadro_vid.width() - 40
+        h_overlay = self.recuadro_vid.height() - 40
+        
+        self.overlay.setGeometry(20, 20, w_overlay, h_overlay)
+        
+        badge_w, badge_h = 80, 40
+        self.lbl_cronometro.setGeometry(w_overlay - badge_w - 20, 20, badge_w, badge_h)
+        
+        if is_product_mode:
+            text_margin = 20
+            text_height = 140 
+            text_y = 60 
+            
+            self.lbl_overlay.setGeometry(text_margin, text_y, w_overlay - (text_margin*2), text_height)
+            self.lbl_overlay.setAlignment(Qt.AlignTop | Qt.AlignHCenter) 
+            
+            img_y = text_y + text_height + 10
+            img_h = h_overlay - img_y - 20
+            img_w = w_overlay - 40
+            
+            if img_h > 50:
+                self.lbl_producto_img.setGeometry(20, img_y, img_w, img_h)
+                
+                curr_pix = self.lbl_producto_img.pixmap()
+                if curr_pix and not curr_pix.isNull():
+                    scaled = curr_pix.scaled(
+                        self.lbl_producto_img.size(), 
+                        Qt.KeepAspectRatio, 
+                        Qt.SmoothTransformation
+                    )
+                    self.lbl_producto_img.setPixmap(scaled)
+            else:
+                self.lbl_producto_img.hide()
+            
+        else:
+            self.lbl_overlay.setGeometry(20, 70, w_overlay - 40, h_overlay - 90)
+            self.lbl_overlay.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+            self.lbl_producto_img.setGeometry(0, 0, 0, 0)
+            self.lbl_producto_img.hide()
 
-    # =================== Cierre ===================
     def closeEvent(self, ev):
+        try: self._overlay_timer.stop(); self._cronometro_timer.stop(); self.overlay.hide()
+        except Exception: pass
+        try: self._error_timer.stop(); self.ventana_error.hide()
+        except Exception: pass
         try:
-            self._overlay_timer.stop()
-            self.overlay.hide()
-        except Exception:
-            pass
+            if self.hilo_resp: self.hilo_resp.stop()
+        except Exception: pass
         try:
-            self._error_timer.stop()
-            self.ventana_error.hide()
-        except Exception:
-            pass
+            if self.cap_resp: self.cap_resp.release()
+        except Exception: pass
+        try: self.timer_cam.stop();
+        except Exception: pass
         try:
-            if self.hilo_resp:
-                self.hilo_resp.stop()
-        except Exception:
-            pass
+            if self.cap_cam: self.cap_cam.release()
+        except Exception: pass
         try:
-            if self.cap_resp:
-                self.cap_resp.release()
-        except Exception:
-            pass
-        try:
-            self.timer_cam.stop()
-            if self.cap_cam:
-                self.cap_cam.release()
-        except Exception:
-            pass
-        try:
-            if self.inferencia:
-                self.inferencia.liberar()
-        except Exception:
-            pass
+            if self.inferencia: self.inferencia.liberar()
+        except Exception: pass
         ev.accept()
