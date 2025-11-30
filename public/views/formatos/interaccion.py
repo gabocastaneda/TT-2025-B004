@@ -23,6 +23,9 @@ class VentanaInteraccion(QMainWindow):
     redimensionada = pyqtSignal()
     video_terminado = pyqtSignal()
     gesto_detectado = pyqtSignal(str)
+    
+    # NUEVA SEÑAL: Se emite cuando termina el tiempo de la alerta de ayuda (6s)
+    alerta_ayuda_terminada = pyqtSignal()
 
     def __init__(self, src_inicial: Optional[str] = None):
         super().__init__()
@@ -30,8 +33,6 @@ class VentanaInteraccion(QMainWindow):
         self.resize(1280, 720)
 
         # Paths
-        # __file__ = public/views/formatos/interaccion.py
-        # Root = TT-2025-B004
         self.dir_root = Path(__file__).resolve().parents[3]
         self.dir_public = self.dir_root / "public"
         self.dir_backend = self.dir_root / "backend" 
@@ -44,22 +45,10 @@ class VentanaInteraccion(QMainWindow):
         
         # --- DEBUG AL INICIAR ---
         print(f"[INIT] Raíz del proyecto: {self.dir_root}")
-        print("[INIT] Escaneando backend/productos para verificar visibilidad:")
-        try:
-            prod_dir = self.dir_backend / "productos"
-            if prod_dir.exists():
-                for f in prod_dir.glob("*"):
-                    print(f"   -> Veo archivo: {f.name}")
-            else:
-                print(f"   [ALERTA] No encuentro la carpeta {prod_dir}")
-        except Exception as e:
-            print(f"   [ERROR] Al escanear: {e}")
-            
+        
         # Verificar si el modelo existe
         modelo_path = self.dir_backend / "modelo.pkl"
-        print(f"[INIT] ¿Modelo existe? {modelo_path.exists()} en {modelo_path}")
-        # ------------------------
-
+        
         fondo_path = self.dir_images / "fondo.png"
         
         # Configurar imagen de fondo
@@ -140,23 +129,23 @@ class VentanaInteraccion(QMainWindow):
         """)
         self.view_vid.setText("Video")
 
-        # --- Banner ROJO ---
+        # --- Banner ROJO (Tipografía Arial, Mixed Case) ---
         self.banner_rojo = QFrame(self)
         self.banner_rojo.setStyleSheet("background: #c0392b; border-radius: 12px; border: none;")
-        self.banner_rojo_lbl = QLabel("⚠️  POR FAVOR, ESPERE PARA CAPTURAR SU RESPUESTA  ⚠️", self.banner_rojo)
+        self.banner_rojo_lbl = QLabel("⚠️ Por favor, espere para capturar su respuesta ⚠️", self.banner_rojo)
         self.banner_rojo_lbl.setAlignment(Qt.AlignCenter)
         self.banner_rojo_lbl.setStyleSheet(
-            "color: #ffffff; font-size: 22px; font-weight: 800; text-transform: uppercase; border: none;"
+            "color: #ffffff; font-family: 'Arial'; font-size: 22px; font-weight: bold; border: none;"
         )
         self.banner_rojo.hide()
 
-        # --- Banner VERDE ---
+        # --- Banner VERDE (Tipografía Arial, Mixed Case) ---
         self.banner_verde = QFrame(self)
         self.banner_verde.setStyleSheet("background: #27ae60; border-radius: 12px; border: none;")
-        self.banner_verde_lbl = QLabel("✓  CAPTURE SU RESPUESTA  ✓", self.banner_verde)
+        self.banner_verde_lbl = QLabel("✓ Capture su respuesta ✓", self.banner_verde)
         self.banner_verde_lbl.setAlignment(Qt.AlignCenter)
         self.banner_verde_lbl.setStyleSheet(
-            "color: #ffffff; font-size: 22px; font-weight: 800; text-transform: uppercase; border: none;"
+            "color: #ffffff; font-family: 'Arial'; font-size: 22px; font-weight: bold; border: none;"
         )
         self.banner_verde.hide()
 
@@ -280,10 +269,7 @@ class VentanaInteraccion(QMainWindow):
         """)
         self.label_estado_gestos.hide()
         
-        # VERIFICACIÓN DE DEPENDENCIAS CRÍTICAS
         self._verificar_dependencias()
-        
-        # Inicializar inferencia de gestos - VERSIÓN ESTRICTA
         self._inicializar_inferencia_gestos_estricta()
 
         self._modo_reproduccion = False
@@ -295,120 +281,72 @@ class VentanaInteraccion(QMainWindow):
             self.cambiar_video_unidad(src_inicial, nombre_resp="resp1")
 
     def _verificar_dependencias(self):
-        """Verifica y reporta el estado de las dependencias críticas"""
         print("\n" + "="*50)
         print("🔍 VERIFICACIÓN DE DEPENDENCIAS")
         print("="*50)
         
-        # Verificar MediaPipe
         try:
             import mediapipe as mp
             print("✅ MediaPipe: OK")
-            mediapipe_ok = True
         except Exception as e:
             print(f"❌ MediaPipe: ERROR - {e}")
-            mediapipe_ok = False
             
-        # Verificar protobuf
         try:
             import google.protobuf
             print(f"✅ Protobuf: OK (v{google.protobuf.__version__})")
         except Exception as e:
             print(f"❌ Protobuf: ERROR - {e}")
             
-        # Verificar modelo
         modelo_path = self.dir_backend / "modelo.pkl"
         print(f"📁 Modelo: {'✅ EXISTE' if modelo_path.exists() else '❌ NO EXISTE'}")
         print("="*50)
-        
-        if not mediapipe_ok:
-            print("\n⚠️  ADVERTENCIA CRÍTICA:")
-            print("MediaPipe no funciona correctamente debido a conflictos de versión.")
-            print("Ejecuta 'python requirements_fix.py' para solucionarlo.")
-            print("Mientras tanto, la aplicación funcionará en MODO SIMULACIÓN.")
-            print("="*50)
 
     def _inicializar_inferencia_gestos_estricta(self):
-        """Inicializa el sistema de inferencia de gestos - VERSIÓN ESTRICTA SIN SIMULACIÓN"""
         try:
             modelo_path = self.dir_backend / "modelo.pkl"
             
-            print(f"\n[GESTOS] Inicializando sistema de gestos (MODO ESTRICTO)...")
-            print(f"[GESTOS] Ruta del modelo: {modelo_path}")
-            print(f"[GESTOS] ¿Modelo existe? {modelo_path.exists()}")
-            
-            # VERIFICACIÓN ESTRICTA - NO PERMITIR SIMULACIÓN
             if not modelo_path.exists():
                 print(f"❌ [GESTOS] ERROR CRÍTICO: Modelo no encontrado en {modelo_path}")
                 raise FileNotFoundError(f"Modelo no encontrado: {modelo_path}")
             
-            # ============================================================
-            # BLOQUE PRINCIPAL DE CARGA - SIN TOLERANCIA A FALLOS
-            # ============================================================
             try:
                 import mediapipe as mp
-                print("✅ MediaPipe importado correctamente")
-                
                 from backend.inferencia import InferenciaGestos
-                print("✅ InferenciaGestos importado correctamente")
                 
-                # CARGAR MODELO REAL OBLIGATORIAMENTE
                 print("[GESTOS] ✅ Cargando modelo real...")
                 self.inferencia = InferenciaGestos(str(modelo_path))
                         
                 self.inferencia.inicializar_deteccion()
                 self.inferencia.set_callback_prediccion(self._on_gesto_detectado)
                 
-                # VERIFICACIÓN FINAL ESTRICTA
                 if hasattr(self.inferencia, 'modelo_data') and self.inferencia.modelo_data:
                     model = self.inferencia.modelo_data.get('model', None)
                     if model:
                         model_type = type(model).__name__
-                        print(f"[GESTOS] Tipo de modelo: {model_type}")
                         if "Simulado" in model_type:
-                            print("❌ [GESTOS] ERROR: Se cargó modelo simulado en lugar del real")
                             raise RuntimeError("Modelo simulado detectado cuando se esperaba modelo real")
                         else:
-                            print("✅ [GESTOS] Modelo real cargado y verificado correctamente")
-                            print(f"✅ [GESTOS] Clases disponibles: {self.inferencia.modelo_data.get('classes', [])}")
+                            print("✅ [GESTOS] Modelo real cargado correctamente")
                 else:
                     raise RuntimeError("No se pudo cargar el modelo_data en la inferencia")
                 
-            except ImportError as e:
-                print(f"❌ Error de importación: {e}")
-                raise
             except Exception as e:
                 print(f"❌ Error inicializando componentes: {e}")
                 raise
                     
         except Exception as e:
-            print(f"❌ ERROR CRÍTICO inicializando inferencia: {type(e).__name__}: {e}")
-            # NO CREAR INFERENCIA SIMULADA - DETENER LA EJECUCIÓN
-            print("🚫 [GESTOS] APLICACIÓN DETENIDA - Modelo real requerido")
+            print(f"❌ ERROR CRÍTICO inicializando inferencia: {e}")
             self.inferencia = None
-            # Mostrar error al usuario
             self._mostrar_error_modelo_faltante(str(e))
-            # Re-lanzar la excepción para detener la ejecución
             raise RuntimeError(f"No se pudo inicializar el sistema de gestos: {e}") from e
 
     def _mostrar_error_modelo_faltante(self, mensaje: str):
-        """Muestra un error crítico cuando falta el modelo"""
         error_msg = f"""
         ❌ ERROR CRÍTICO: Modelo no disponible
-        
-        No se pudo cargar el modelo de reconocimiento de gestos.
-        
         Detalles: {mensaje}
-        
-        Verifique que el archivo 'modelo.pkl' exista en:
-        {self.dir_backend / "modelo.pkl"}
-        
-        La aplicación no puede funcionar sin el modelo real.
-        
-        Contacte al administrador del sistema.
+        Verifique que 'modelo.pkl' exista.
         """
-        
-        QMessageBox.critical(self, "Error de Modelo - Aplicación No Puede Continuar", error_msg)
+        QMessageBox.critical(self, "Error de Modelo", error_msg)
 
     def _get_overlay_style(self, font_size=15):
         return f"""
@@ -424,13 +362,50 @@ class VentanaInteraccion(QMainWindow):
         """
 
     def mostrar_error_captura(self):
+        """Muestra el error estándar de captura"""
         try:
+            self.lbl_error.setText("⚠️RESPUESTA NO CAPTURADA\nPOR FAVOR, CAPTURE NUEVAMENTE⚠️")
             self._recolocar_ventana_error()
             self.ventana_error.show()
             self.ventana_error.raise_()
             self._error_timer.start(5000)
         except Exception as e:
             pass
+
+    def mostrar_alerta_ayuda_asociado(self):
+        """
+        Muestra la alerta crítica cuando se alcanza el límite de errores.
+        Dura 6 segundos y emite señal al finalizar.
+        """
+        try:
+            texto = "⚠️ Notamos que no puedes realizar correctamente tu captura, un asociado vendrá a apoyarte ⚠️"
+            self.lbl_error.setText(texto)
+            self._recolocar_ventana_error()
+            self.ventana_error.show()
+            self.ventana_error.raise_()
+            
+            # Detenemos cualquier timer anterior
+            self._error_timer.stop()
+            try:
+                self._error_timer.timeout.disconnect()
+            except: pass
+            
+            # Definimos la función de finalización
+            def _on_finish():
+                self._cerrar_ventana_error()
+                self.alerta_ayuda_terminada.emit()
+                # Restaurar comportamiento normal del timer
+                try: self._error_timer.timeout.disconnect()
+                except: pass
+                self._error_timer.timeout.connect(self._cerrar_ventana_error)
+
+            self._error_timer.timeout.connect(_on_finish)
+            self._error_timer.start(6000) # 6 segundos exactos
+            
+        except Exception as e:
+            print(f"Error mostrando alerta ayuda: {e}")
+            # Si falla, emitimos la señal para no bloquear el flujo
+            self.alerta_ayuda_terminada.emit()
 
     def _cerrar_ventana_error(self):
         self.ventana_error.hide()
@@ -452,7 +427,6 @@ class VentanaInteraccion(QMainWindow):
 
     def set_modo_gestos(self, activar: bool):
         if self.inferencia is None:
-            print("❌ No se puede activar modo gestos: inferencia no disponible")
             return
             
         self.modo_gestos = activar
@@ -463,9 +437,6 @@ class VentanaInteraccion(QMainWindow):
             self.label_estado_gestos.hide()
 
     def _on_gesto_detectado(self, gesto: str):
-        """Maneja los gestos detectados"""
-        print(f"🎯 [GESTOS] Gesto detectado: '{gesto}'")
-        # Emitir la señal para que otros componentes puedan reaccionar
         self.gesto_detectado.emit(gesto)
 
     def _actualizar_estado_gestos(self, mensaje: str, color: str = "#3498db"):
@@ -493,13 +464,12 @@ class VentanaInteraccion(QMainWindow):
 
     def _tick_cam(self):
         if not self.cap_cam or not self.cap_cam.isOpened():
-            self.view_cam.setText("CÁMARA NO DISPONIBLE\n\nVerifique conexión")
+            self.view_cam.setText("CÁMARA NO DISPONIBLE")
             return
             
         try:
             ok, frame = self.cap_cam.read()
-            if not ok:
-                return
+            if not ok: return
                 
             frame_procesado = frame
             estado_mensaje = "Cámara activa"
@@ -509,7 +479,6 @@ class VentanaInteraccion(QMainWindow):
                 try:
                     frame_procesado, pred, conf, estado = self.inferencia.procesar_frame(frame)
                     
-                    # Mapeo de estados a mensajes y colores
                     estados_config = {
                         "SIMULACION": ("🔧 MODO SIMULACIÓN", "#f39c12"),
                         "RECONOCIDO": (f"✅ {pred} ({conf*100:.1f}%)", "#27ae60"),
@@ -520,7 +489,6 @@ class VentanaInteraccion(QMainWindow):
                         "PROCESANDO": ("⏳ Procesando...", "#3498db")
                     }
                     
-                    # Buscar el estado en el mapeo o usar el estado directamente
                     for key, (mensaje, color) in estados_config.items():
                         if key in estado.upper():
                             estado_mensaje = mensaje
@@ -531,7 +499,6 @@ class VentanaInteraccion(QMainWindow):
                         color_estado = "#f39c12"
                         
                 except Exception as e:
-                    print(f"❌ Error en procesamiento de gestos: {e}")
                     frame_procesado = cv2.flip(frame, 1)
                     estado_mensaje = "❌ Error en gestos"
                     color_estado = "#e74c3c"
@@ -541,14 +508,11 @@ class VentanaInteraccion(QMainWindow):
                     estado_mensaje = "⏸️ Gestos desactivados"
                     color_estado = "#95a5a6"
 
-            # Actualizar la etiqueta de estado
             self._actualizar_estado_gestos(estado_mensaje, color_estado)
 
-            # Convertir y mostrar el frame
             rgb_image = cv2.cvtColor(frame_procesado, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_image.shape
             bytes_per_line = ch * w
-            
             qimg = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
             
             if self.view_cam.width() > 0 and self.view_cam.height() > 0:
@@ -561,22 +525,19 @@ class VentanaInteraccion(QMainWindow):
             else:
                 self.view_cam.setPixmap(QPixmap.fromImage(qimg))
                 
-        except Exception as e:
-            print(f"❌ Error en tick_cam: {e}")
+        except Exception:
+            pass
 
     def cambiar_video_unidad(self, src: Optional[str], nombre_resp: Optional[str] = None):
         self._cerrar_overlay() 
 
         try:
-            if self.hilo_resp:
-                self.hilo_resp.stop()
-        except Exception:
-            pass
+            if self.hilo_resp: self.hilo_resp.stop()
+        except: pass
         try:
-            if self.cap_resp:
-                self.cap_resp.release()
-        except Exception:
-            pass
+            if self.cap_resp: self.cap_resp.release()
+        except: pass
+        
         self.hilo_resp = None
         self.cap_resp = None
 
@@ -616,47 +577,30 @@ class VentanaInteraccion(QMainWindow):
         self._emitir_terminado()
 
     def _emitir_terminado(self):
-        try:
-            self.video_terminado.emit()
-        except Exception:
-            pass
+        try: self.video_terminado.emit()
+        except: pass
 
     def mostrar_overlay_texto(self, texto: str, ms: int = 10_000, on_done: Optional[Callable[[], None]] = None, producto_data: Optional[dict] = None):
-        """
-        Muestra texto e imagen.
-        USA BÚSQUEDA RECURSIVA PARA ENCONTRAR LA IMAGEN SI LA RUTA FALLA.
-        """
         try:
             self.lbl_overlay.setText(texto)
-            
             is_product_mode = producto_data is not None and 'imagen' in producto_data and producto_data['imagen']
             
             if is_product_mode:
                 raw_path = str(producto_data['imagen'])
-                # Extraemos solo el nombre (ej. "tv_led_50.png")
                 fname = Path(raw_path).name
-                
                 final_path = None
                 
-                # ESTRATEGIA: Buscar el archivo recursivamente donde sea que esté
-                print(f"\n[DEBUG IMAGEN] Buscando archivo '{fname}' en el sistema...")
-                
-                # 1. Buscar recursivamente en BACKEND (Prioridad)
+                # Búsqueda recursiva
                 try:
                     encontrados = list(self.dir_backend.rglob(fname))
-                    if encontrados:
-                        final_path = encontrados[0]
-                        print(f"   -> Encontrado en Backend: {final_path}")
-                except Exception: pass
+                    if encontrados: final_path = encontrados[0]
+                except: pass
                 
-                # 2. Si no, buscar recursivamente en PUBLIC
                 if not final_path:
                     try:
                         encontrados = list(self.dir_public.rglob(fname))
-                        if encontrados:
-                            final_path = encontrados[0]
-                            print(f"   -> Encontrado en Public: {final_path}")
-                    except Exception: pass
+                        if encontrados: final_path = encontrados[0]
+                    except: pass
                 
                 if final_path:
                     pix = QPixmap(str(final_path))
@@ -665,10 +609,10 @@ class VentanaInteraccion(QMainWindow):
                         self.lbl_producto_img.setText("") 
                         self.lbl_producto_img.show()
                     else:
-                        self.lbl_producto_img.setText(f"ERROR: Archivo dañado\n{final_path.name}")
+                        self.lbl_producto_img.setText(f"ERROR: Archivo dañado")
                         self.lbl_producto_img.show()
                 else:
-                    self.lbl_producto_img.setText(f"NO ENCONTRADO:\n{fname}\n(Búsqueda recursiva falló)")
+                    self.lbl_producto_img.setText(f"NO ENCONTRADO:\n{fname}")
                     self.lbl_producto_img.show()
             else:
                 self.lbl_producto_img.hide()
@@ -703,7 +647,7 @@ class VentanaInteraccion(QMainWindow):
         self._overlay_cb = None
         if callable(cb):
             try: cb()
-            except Exception as e: print("[Overlay] callback error:", e)
+            except: pass
 
     def _asegurar_local(self, src: str, nombre_resp: Optional[str]) -> Optional[str]:
         if not (src.startswith("http://") or src.startswith("https://")):
@@ -736,9 +680,8 @@ class VentanaInteraccion(QMainWindow):
                         if chunk:
                             f.write(chunk)
             return str(destino)
-        except Exception as e:
-            if destino.exists():
-                destino.unlink(missing_ok=True)
+        except Exception:
+            if destino.exists(): destino.unlink(missing_ok=True)
             return None
 
     def set_modo_reproduccion(self, on: bool):
@@ -792,14 +735,12 @@ class VentanaInteraccion(QMainWindow):
         self.banner_verde.setGeometry(x_vid, banner_y, ancho_vid, banner_h)
         self.banner_verde_lbl.setGeometry(0, 0, ancho_vid, banner_h)
 
-        # Verificacion segura
         has_pixmap = (self.lbl_producto_img.pixmap() is not None and not self.lbl_producto_img.pixmap().isNull())
         has_error_txt = "NO ENCONTRADO" in self.lbl_producto_img.text() or "IMAGEN NO" in self.lbl_producto_img.text() or "ERROR" in self.lbl_producto_img.text()
         
         is_prod_mode = self.lbl_producto_img.isVisible() and (has_pixmap or has_error_txt)
         
         self._recolocar_overlay(is_product_mode=is_prod_mode)
-        
         self._recolocar_estado_gestos()
         
         if self.ventana_error.isVisible():
@@ -808,16 +749,11 @@ class VentanaInteraccion(QMainWindow):
     def _actualizar_barra_pixmap(self):
         if not self.barra_pix_original or self.barra_pix_original.isNull():
             return
-
         w = self.barra.width()
         h = self.barra.height()
-        if w <= 0 or h <= 0:
-            return
-
+        if w <= 0 or h <= 0: return
         scaled = self.barra_pix_original.scaled(
-            w, h,
-            Qt.KeepAspectRatioByExpanding,
-            Qt.SmoothTransformation
+            w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
         )
         self.barra.setPixmap(scaled)
 
@@ -844,7 +780,6 @@ class VentanaInteraccion(QMainWindow):
             
             if img_h > 50:
                 self.lbl_producto_img.setGeometry(20, img_y, img_w, img_h)
-                
                 curr_pix = self.lbl_producto_img.pixmap()
                 if curr_pix and not curr_pix.isNull():
                     scaled = curr_pix.scaled(
@@ -855,7 +790,6 @@ class VentanaInteraccion(QMainWindow):
                     self.lbl_producto_img.setPixmap(scaled)
             else:
                 self.lbl_producto_img.hide()
-            
         else:
             self.lbl_overlay.setGeometry(20, 70, w_overlay - 40, h_overlay - 90)
             self.lbl_overlay.setAlignment(Qt.AlignTop | Qt.AlignLeft)
@@ -864,21 +798,21 @@ class VentanaInteraccion(QMainWindow):
 
     def closeEvent(self, ev):
         try: self._overlay_timer.stop(); self._cronometro_timer.stop(); self.overlay.hide()
-        except Exception: pass
+        except: pass
         try: self._error_timer.stop(); self.ventana_error.hide()
-        except Exception: pass
+        except: pass
         try:
             if self.hilo_resp: self.hilo_resp.stop()
-        except Exception: pass
+        except: pass
         try:
             if self.cap_resp: self.cap_resp.release()
-        except Exception: pass
+        except: pass
         try: self.timer_cam.stop();
-        except Exception: pass
+        except: pass
         try:
             if self.cap_cam: self.cap_cam.release()
-        except Exception: pass
+        except: pass
         try:
             if self.inferencia: self.inferencia.liberar()
-        except Exception: pass
+        except: pass
         ev.accept()
