@@ -4,7 +4,7 @@ import re, cv2, hashlib, requests
 from pathlib import Path
 from typing import Optional, Callable
 
-from PyQt5.QtWidgets import QMainWindow, QFrame, QLabel, QGraphicsDropShadowEffect
+from PyQt5.QtWidgets import QMainWindow, QFrame, QLabel, QGraphicsDropShadowEffect, QMessageBox
 from PyQt5.QtGui import QPixmap, QImage, QFont, QColor
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QRect
 
@@ -43,7 +43,6 @@ class VentanaInteraccion(QMainWindow):
         self.dir_images.mkdir(parents=True, exist_ok=True)
         
         # --- DEBUG AL INICIAR ---
-        # Imprimimos qué archivos ve Python realmente en backend/productos
         print(f"[INIT] Raíz del proyecto: {self.dir_root}")
         print("[INIT] Escaneando backend/productos para verificar visibilidad:")
         try:
@@ -55,6 +54,10 @@ class VentanaInteraccion(QMainWindow):
                 print(f"   [ALERTA] No encuentro la carpeta {prod_dir}")
         except Exception as e:
             print(f"   [ERROR] Al escanear: {e}")
+            
+        # Verificar si el modelo existe
+        modelo_path = self.dir_backend / "modelo.pkl"
+        print(f"[INIT] ¿Modelo existe? {modelo_path.exists()} en {modelo_path}")
         # ------------------------
 
         fondo_path = self.dir_images / "fondo.png"
@@ -277,7 +280,11 @@ class VentanaInteraccion(QMainWindow):
         """)
         self.label_estado_gestos.hide()
         
-        self._inicializar_inferencia_gestos()
+        # VERIFICACIÓN DE DEPENDENCIAS CRÍTICAS
+        self._verificar_dependencias()
+        
+        # Inicializar inferencia de gestos - VERSIÓN ESTRICTA
+        self._inicializar_inferencia_gestos_estricta()
 
         self._modo_reproduccion = False
         self._recolocar()
@@ -286,6 +293,122 @@ class VentanaInteraccion(QMainWindow):
         if src_inicial:
             self.set_modo_reproduccion(True)
             self.cambiar_video_unidad(src_inicial, nombre_resp="resp1")
+
+    def _verificar_dependencias(self):
+        """Verifica y reporta el estado de las dependencias críticas"""
+        print("\n" + "="*50)
+        print("🔍 VERIFICACIÓN DE DEPENDENCIAS")
+        print("="*50)
+        
+        # Verificar MediaPipe
+        try:
+            import mediapipe as mp
+            print("✅ MediaPipe: OK")
+            mediapipe_ok = True
+        except Exception as e:
+            print(f"❌ MediaPipe: ERROR - {e}")
+            mediapipe_ok = False
+            
+        # Verificar protobuf
+        try:
+            import google.protobuf
+            print(f"✅ Protobuf: OK (v{google.protobuf.__version__})")
+        except Exception as e:
+            print(f"❌ Protobuf: ERROR - {e}")
+            
+        # Verificar modelo
+        modelo_path = self.dir_backend / "modelo.pkl"
+        print(f"📁 Modelo: {'✅ EXISTE' if modelo_path.exists() else '❌ NO EXISTE'}")
+        print("="*50)
+        
+        if not mediapipe_ok:
+            print("\n⚠️  ADVERTENCIA CRÍTICA:")
+            print("MediaPipe no funciona correctamente debido a conflictos de versión.")
+            print("Ejecuta 'python requirements_fix.py' para solucionarlo.")
+            print("Mientras tanto, la aplicación funcionará en MODO SIMULACIÓN.")
+            print("="*50)
+
+    def _inicializar_inferencia_gestos_estricta(self):
+        """Inicializa el sistema de inferencia de gestos - VERSIÓN ESTRICTA SIN SIMULACIÓN"""
+        try:
+            modelo_path = self.dir_backend / "modelo.pkl"
+            
+            print(f"\n[GESTOS] Inicializando sistema de gestos (MODO ESTRICTO)...")
+            print(f"[GESTOS] Ruta del modelo: {modelo_path}")
+            print(f"[GESTOS] ¿Modelo existe? {modelo_path.exists()}")
+            
+            # VERIFICACIÓN ESTRICTA - NO PERMITIR SIMULACIÓN
+            if not modelo_path.exists():
+                print(f"❌ [GESTOS] ERROR CRÍTICO: Modelo no encontrado en {modelo_path}")
+                raise FileNotFoundError(f"Modelo no encontrado: {modelo_path}")
+            
+            # ============================================================
+            # BLOQUE PRINCIPAL DE CARGA - SIN TOLERANCIA A FALLOS
+            # ============================================================
+            try:
+                import mediapipe as mp
+                print("✅ MediaPipe importado correctamente")
+                
+                from backend.inferencia import InferenciaGestos
+                print("✅ InferenciaGestos importado correctamente")
+                
+                # CARGAR MODELO REAL OBLIGATORIAMENTE
+                print("[GESTOS] ✅ Cargando modelo real...")
+                self.inferencia = InferenciaGestos(str(modelo_path))
+                        
+                self.inferencia.inicializar_deteccion()
+                self.inferencia.set_callback_prediccion(self._on_gesto_detectado)
+                
+                # VERIFICACIÓN FINAL ESTRICTA
+                if hasattr(self.inferencia, 'modelo_data') and self.inferencia.modelo_data:
+                    model = self.inferencia.modelo_data.get('model', None)
+                    if model:
+                        model_type = type(model).__name__
+                        print(f"[GESTOS] Tipo de modelo: {model_type}")
+                        if "Simulado" in model_type:
+                            print("❌ [GESTOS] ERROR: Se cargó modelo simulado en lugar del real")
+                            raise RuntimeError("Modelo simulado detectado cuando se esperaba modelo real")
+                        else:
+                            print("✅ [GESTOS] Modelo real cargado y verificado correctamente")
+                            print(f"✅ [GESTOS] Clases disponibles: {self.inferencia.modelo_data.get('classes', [])}")
+                else:
+                    raise RuntimeError("No se pudo cargar el modelo_data en la inferencia")
+                
+            except ImportError as e:
+                print(f"❌ Error de importación: {e}")
+                raise
+            except Exception as e:
+                print(f"❌ Error inicializando componentes: {e}")
+                raise
+                    
+        except Exception as e:
+            print(f"❌ ERROR CRÍTICO inicializando inferencia: {type(e).__name__}: {e}")
+            # NO CREAR INFERENCIA SIMULADA - DETENER LA EJECUCIÓN
+            print("🚫 [GESTOS] APLICACIÓN DETENIDA - Modelo real requerido")
+            self.inferencia = None
+            # Mostrar error al usuario
+            self._mostrar_error_modelo_faltante(str(e))
+            # Re-lanzar la excepción para detener la ejecución
+            raise RuntimeError(f"No se pudo inicializar el sistema de gestos: {e}") from e
+
+    def _mostrar_error_modelo_faltante(self, mensaje: str):
+        """Muestra un error crítico cuando falta el modelo"""
+        error_msg = f"""
+        ❌ ERROR CRÍTICO: Modelo no disponible
+        
+        No se pudo cargar el modelo de reconocimiento de gestos.
+        
+        Detalles: {mensaje}
+        
+        Verifique que el archivo 'modelo.pkl' exista en:
+        {self.dir_backend / "modelo.pkl"}
+        
+        La aplicación no puede funcionar sin el modelo real.
+        
+        Contacte al administrador del sistema.
+        """
+        
+        QMessageBox.critical(self, "Error de Modelo - Aplicación No Puede Continuar", error_msg)
 
     def _get_overlay_style(self, font_size=15):
         return f"""
@@ -316,7 +439,7 @@ class VentanaInteraccion(QMainWindow):
         error_width = 450
         error_height = 150
         x = (self.width() - error_width) // 2
-        y = (self.height() - error_height) // 2
+        y = (self.height() - error_height) >> 1
         self.ventana_error.setGeometry(x, y, error_width, error_height)
         self.lbl_error.setGeometry(0, 0, error_width, error_height)
 
@@ -328,37 +451,21 @@ class VentanaInteraccion(QMainWindow):
             self._cronometro_timer.stop()
 
     def set_modo_gestos(self, activar: bool):
+        if self.inferencia is None:
+            print("❌ No se puede activar modo gestos: inferencia no disponible")
+            return
+            
         self.modo_gestos = activar
         if activar:
             self.label_estado_gestos.show()
             self._actualizar_estado_gestos("🟢 LISTO - Mostrando manos", "#27ae60")
         else:
             self.label_estado_gestos.hide()
-    
-    def _inicializar_inferencia_gestos(self):
-        try:
-            modelo_path = self.dir_root / "backend" / "modelo.pkl"
-            
-            from backend.inferencia import InferenciaGestos
-            
-            if modelo_path.exists():
-                self.inferencia = InferenciaGestos(str(modelo_path))
-            else:
-                self.inferencia = InferenciaGestos()
-                    
-            self.inferencia.inicializar_deteccion()
-            self.inferencia.set_callback_prediccion(self._on_gesto_detectado)
-                    
-        except Exception:
-            class InferenciaSimulada:
-                def __init__(self, *args): pass
-                def inicializar_deteccion(self): pass
-                def set_callback_prediccion(self, cb): pass
-                def procesar_frame(self, frame): return (cv2.flip(frame, 1), "Simulación", 0.0, "SIMULACION")
-                def liberar(self): pass
-            self.inferencia = InferenciaSimulada()
 
     def _on_gesto_detectado(self, gesto: str):
+        """Maneja los gestos detectados"""
+        print(f"🎯 [GESTOS] Gesto detectado: '{gesto}'")
+        # Emitir la señal para que otros componentes puedan reaccionar
         self.gesto_detectado.emit(gesto)
 
     def _actualizar_estado_gestos(self, mensaje: str, color: str = "#3498db"):
@@ -395,24 +502,49 @@ class VentanaInteraccion(QMainWindow):
                 return
                 
             frame_procesado = frame
+            estado_mensaje = "Cámara activa"
+            color_estado = "#3498db"
+            
             if self.modo_gestos and self.inferencia:
                 try:
                     frame_procesado, pred, conf, estado = self.inferencia.procesar_frame(frame)
                     
-                    color_map = {
-                        "GRABANDO": "#e67e22", "RECONOCIDO": "#27ae60", "LISTO": "#3498db",
-                        "ESPERANDO": "#95a5a6", "MANO_DETECTADA": "#9b59b6", "SIMULACION": "#e67e22",
-                        "ERROR": "#e74c3c"
+                    # Mapeo de estados a mensajes y colores
+                    estados_config = {
+                        "SIMULACION": ("🔧 MODO SIMULACIÓN", "#f39c12"),
+                        "RECONOCIDO": (f"✅ {pred} ({conf*100:.1f}%)", "#27ae60"),
+                        "GRABANDO": (f"📹 {pred}", "#e67e22"),
+                        "ESPERANDO": ("🔄 Esperando gesto...", "#95a5a6"),
+                        "MANO": ("✋ Mano detectada", "#9b59b6"),
+                        "ERROR": ("❌ Error detección", "#e74c3c"),
+                        "PROCESANDO": ("⏳ Procesando...", "#3498db")
                     }
-                    color = color_map.get(estado, "#f39c12")
-                    self._actualizar_estado_gestos(f"{estado} {pred}", color)
+                    
+                    # Buscar el estado en el mapeo o usar el estado directamente
+                    for key, (mensaje, color) in estados_config.items():
+                        if key in estado.upper():
+                            estado_mensaje = mensaje
+                            color_estado = color
+                            break
+                    else:
+                        estado_mensaje = f"{estado}: {pred}"
+                        color_estado = "#f39c12"
                         
                 except Exception as e:
+                    print(f"❌ Error en procesamiento de gestos: {e}")
                     frame_procesado = cv2.flip(frame, 1)
-                    self._actualizar_estado_gestos("Error procesando", "#e74c3c")
+                    estado_mensaje = "❌ Error en gestos"
+                    color_estado = "#e74c3c"
             else:
                 frame_procesado = cv2.flip(frame, 1)
+                if self.modo_gestos:
+                    estado_mensaje = "⏸️ Gestos desactivados"
+                    color_estado = "#95a5a6"
 
+            # Actualizar la etiqueta de estado
+            self._actualizar_estado_gestos(estado_mensaje, color_estado)
+
+            # Convertir y mostrar el frame
             rgb_image = cv2.cvtColor(frame_procesado, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_image.shape
             bytes_per_line = ch * w
@@ -429,8 +561,8 @@ class VentanaInteraccion(QMainWindow):
             else:
                 self.view_cam.setPixmap(QPixmap.fromImage(qimg))
                 
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"❌ Error en tick_cam: {e}")
 
     def cambiar_video_unidad(self, src: Optional[str], nombre_resp: Optional[str] = None):
         self._cerrar_overlay() 

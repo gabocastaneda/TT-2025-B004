@@ -1,3 +1,4 @@
+# public/views/main.py
 # -*- coding: utf-8 -*-
 # public/views/main.py
 import sys
@@ -12,6 +13,16 @@ for p in _THIS.parents:
         break
 if root and str(root) not in sys.path:
     sys.path.insert(0, str(root))
+
+# Importar las clases necesarias para el modelo antes de cualquier otra cosa
+try:
+    from backend.model_utils import SimpleScaler, SimpleLabelEncoder
+    # Hacer que estén disponibles globalmente
+    sys.modules['__main__'].SimpleScaler = SimpleScaler
+    sys.modules['__main__'].SimpleLabelEncoder = SimpleLabelEncoder
+    print("Clases del modelo cargadas correctamente")
+except ImportError as e:
+    print(f"No se pudieron cargar las clases del modelo: {e}")
 
 from PyQt5.QtWidgets import QApplication
 from public.views.gestor_app import GestorAplicacion

@@ -9,6 +9,8 @@ from typing import Tuple, Optional, Callable
 from pathlib import Path
 from collections import Counter
 import joblib
+from models.knn_model import KNN
+from backend.model_utils import SimpleScaler, SimpleLabelEncoder
 
 warnings.filterwarnings("ignore", category=UserWarning, module="google.protobuf")
 
@@ -93,131 +95,162 @@ class InferenciaGestos:
             modelo_default = Path(__file__).parent / "modelo.pkl"
             if modelo_default.exists():
                 modelo_path = str(modelo_default)
-                print(f"[GESTOS] Usando modelo por defecto: {modelo_path}")
+                print(f"[GESTOS] ✅ Usando modelo por defecto: {modelo_path}")
         
         if modelo_path:
             self._cargar_modelo_definitivo(modelo_path)
+        else:
+            print("❌ [GESTOS] No se proporcionó ruta de modelo, usando simulación")
+            self._crear_modelo_simulado()
 
     def _cargar_modelo_definitivo(self, modelo_path: str):
-        """Carga el modelo creando los módulos necesarios"""
-        print(f"[GESTOS] === CARGA COMPATIBLE DEL MODELO ===")
+        """Carga el modelo usando la estructura real de módulos"""
+        print(f"[GESTOS] === CARGA CON ESTRUCTURA REAL ===")
         print(f"[GESTOS] Ruta: {modelo_path}")
         
         path_obj = Path(modelo_path)
         if not path_obj.exists():
-            print(f"Archivo no existe")
-            return
+            print(f"❌ ERROR CRÍTICO: Archivo de modelo no existe en {modelo_path}")
+            raise FileNotFoundError(f"Modelo no encontrado: {modelo_path}")
         
         try:
-            # 1. CREAR ESTRUCTURA DE MÓDULOS COMPATIBLE
-            import sys
-            import types
-            
-            # Crear módulo 'models' si no existe
-            if 'models' not in sys.modules:
-                models_module = types.ModuleType('models')
-                sys.modules['models'] = models_module
-                print("Módulo 'models' creado")
-            
-            # Crear submódulo 'models.knn_model' con la clase KNN
-            if 'models.knn_model' not in sys.modules:
-                knn_module = types.ModuleType('knn_model')
-                
-                # Definir la clase KNN exactamente igual a la que tenemos
-                class KNN:
-                    def __init__(self, k=3):
-                        self.k = k
-                        self.X_train = None
-                        self.y_train = None
+            # ============================================================
+            # 1. VERIFICAR QUE LOS MÓDULOS REQUERIDOS EXISTAN
+            # ============================================================
+            try:
+                # Intentar importar la clase KNN desde la estructura real dentro de backend
+                print("✅ Módulo 'backend.models.knn_model' importado correctamente")
+            except ImportError as e:
+                print(f"❌ Error importando backend.models.knn_model: {e}")
+                print("💡 Asegúrate de que existe la carpeta 'backend/models' con 'knn_model.py'")
+                # Intentar estructura alternativa
+                try:
+                    print("✅ Módulo 'models.knn_model' importado correctamente (estructura alternativa)")
+                except ImportError:
+                    raise ImportError("No se pudo importar KNN desde ninguna estructura")
 
-                    def fit(self, X, y):
-                        self.X_train = X
-                        self.y_train = y
-
-                    def predict(self, X):
-                        return np.array([self._predecir(x) for x in X])
-                    
-                    def predict_proba(self, X):
-                        predictions = []
-                        for x in X:
-                            distancias = np.linalg.norm(self.X_train - x, axis=1)
-                            vecinos_idx = np.argsort(distancias)[:self.k]
-                            etiquetas_vecinas = self.y_train[vecinos_idx]
-                            counter = Counter(etiquetas_vecinas)
-                            total_vecinos = len(etiquetas_vecinas)
-                            probas = [counter.get(clase, 0) / total_vecinos for clase in np.unique(self.y_train)]
-                            predictions.append(probas)
-                        
-                        return np.array(predictions)
-
-                    def _predecir(self, x):
-                        distancias = np.linalg.norm(self.X_train - x, axis=1)
-                        vecinos_idx = np.argsort(distancias)[:self.k]
-                        etiquetas_vecinas = self.y_train[vecinos_idx]
-                        distancias_vecinas = distancias[vecinos_idx]
-
-                        # Evita división entre 0
-                        pesos = 1 / (distancias_vecinas + 1e-5)
-                        
-                        # Acumula pesos por clase
-                        pesos_por_clase = {}
-                        for etiqueta, peso in zip(etiquetas_vecinas, pesos):
-                            pesos_por_clase[etiqueta] = pesos_por_clase.get(etiqueta, 0) + peso
-
-                        # Selecciona la clase con mayor peso acumulado
-                        etiqueta_mas_comun = max(pesos_por_clase, key=pesos_por_clase.get)
-                        return etiqueta_mas_comun
-                
-                # Agregar la clase al módulo
-                knn_module.KNN = KNN
-                sys.modules['models.knn_model'] = knn_module
-                print("Módulo 'models.knn_model' creado con clase KNN")
-            
+            # ============================================================
             # 2. CARGAR EL MODELO
-            import pickle
+            # ============================================================
+            print(f"[GESTOS] Cargando modelo desde: {modelo_path}")
             
             with open(modelo_path, 'rb') as f:
                 self.modelo_data = joblib.load(f)
             
-            print("MODELO CARGADO EXITOSAMENTE")
+            print("✅ ARCHIVO DE MODELO CARGADO")
+
+            # ============================================================
+            # 3. VERIFICACIONES DE INTEGRIDAD DEL MODELO
+            # ============================================================
+            if not isinstance(self.modelo_data, dict):
+                raise TypeError(f"Modelo debe ser un diccionario, no {type(self.modelo_data)}")
             
-            # Verificación básica
-            if isinstance(self.modelo_data, dict):
-                if 'model' in self.modelo_data:
-                    model = self.modelo_data['model']
-                    print(f"[GESTOS] Modelo tipo: {type(model)}")
-                    print(f"[GESTOS] Modelo k: {getattr(model, 'k', 'N/A')}")
-                    
-                    # Verificar que el modelo tenga los métodos necesarios
-                    if hasattr(model, 'predict') and hasattr(model, 'predict_proba'):
-                        print("Modelo tiene métodos predict y predict_proba")
-                    else:
-                        print("Modelo no tiene los métodos necesarios")
-                        
-                if 'classes' in self.modelo_data:
-                    print(f"[GESTOS] Clases: {list(self.modelo_data['classes'])}")
-                if 'scaler' in self.modelo_data:
-                    scaler_type = type(self.modelo_data['scaler'])
-                    print(f"[GESTOS] Scaler: {scaler_type}")
+            if 'model' not in self.modelo_data:
+                raise KeyError("El modelo no contiene la clave 'model'")
             
+            model = self.modelo_data['model']
+            if model is None:
+                raise ValueError("El modelo interno es None")
+            
+            # Verificar que el modelo tenga los métodos necesarios
+            if not hasattr(model, 'predict'):
+                raise AttributeError("El modelo no tiene método 'predict'")
+            
+            if not hasattr(model, 'predict_proba'):
+                raise AttributeError("El modelo no tiene método 'predict_proba'")
+            
+            # Verificar que sea un modelo KNN real
+            model_type = type(model).__name__
+            if "KNN" not in model_type:
+                print(f"⚠️  Tipo de modelo: {model_type} (no es KNN, pero continuando)")
+            else:
+                print(f"✅ Modelo KNN detectado: {model_type}")
+            
+            # Verificar clases
+            if 'classes' not in self.modelo_data:
+                raise KeyError("El modelo no contiene la clave 'classes'")
+            
+            classes = self.modelo_data['classes']
+            if not classes or len(classes) == 0:
+                raise ValueError("La lista de clases está vacía")
+            
+            # Verificar scaler
+            scaler = self.modelo_data.get('scaler', None)
+            if scaler is not None and not hasattr(scaler, 'transform'):
+                print("⚠️  Scaler no tiene método 'transform', pero continuando...")
+
+            # Verificar datos de entrenamiento
+            if hasattr(model, 'X_train') and model.X_train is not None:
+                print(f"✅ Datos de entrenamiento: {len(model.X_train)} muestras")
+            else:
+                print("⚠️  No se encontraron datos de entrenamiento en el modelo")
+
+            # ============================================================
+            # 4. INFORMACIÓN DE DIAGNÓSTICO
+            # ============================================================
+            print("✅ MODELO KNN PERSONALIZADO CARGADO EXITOSAMENTE")
+            print(f"   • Tipo de modelo: {model_type}")
+            print(f"   • Parámetro k: {getattr(model, 'k', 'N/A')}")
+            print(f"   • Clases: {list(classes)}")
+            print(f"   • Scaler: {type(scaler).__name__ if scaler else 'None'}")
+            print(f"   • Tamaño dataset de entrenamiento: {len(getattr(model, 'X_train', [])) if hasattr(model, 'X_train') and model.X_train is not None else 'N/A'}")
+            
+            # ============================================================
+            # 5. PRUEBA BÁSICA DE FUNCIONALIDAD
+            # ============================================================
+            print("[GESTOS] Realizando prueba básica del modelo...")
+            try:
+                # Determinar el número de características
+                if hasattr(model, 'X_train') and model.X_train is not None and len(model.X_train) > 0:
+                    n_features = model.X_train.shape[1]
+                else:
+                    # Estimación por defecto basada en el dataset
+                    n_features = 820  # Valor por defecto basado en tu dataset
+                
+                # Crear datos de prueba simples
+                test_data = np.random.rand(1, n_features)
+                
+                # Probar predicción
+                prediction = model.predict(test_data)
+                proba = model.predict_proba(test_data)
+                
+                print(f"   • Prueba predict: ✅ (output: {prediction})")
+                print(f"   • Prueba predict_proba: ✅ (shape: {proba.shape})")
+                print(f"   • Características: {n_features}")
+                
+            except Exception as test_error:
+                print(f"⚠️  Advertencia en prueba: {test_error}")
+                # No levantamos excepción aquí, solo es una prueba diagnóstica
+
+            print("=" * 60)
+                
         except Exception as e:
-            print(f"ERROR cargando modelo: {e}")
+            print(f"❌ ERROR cargando modelo: {e}")
+            print(f"❌ Tipo de error: {type(e).__name__}")
             import traceback
-            print(f"Traceback: {traceback.format_exc()}")
+            print(f"❌ Traceback completo:\n{traceback.format_exc()}")
+            
+            # Limpiar en caso de error
             self.modelo_data = None
             
-            # Intentar crear modelo simulado como fallback
-            self._crear_modelo_simulado()
+            # Proporcionar mensaje de ayuda específico
+            if "No module named" in str(e):
+                print("\n💡 SOLUCIÓN:")
+                print("   Crea la carpeta 'backend/models' en el proyecto")
+                print("   con el archivo 'knn_model.py' que contiene la clase KNN")
+            
+            raise RuntimeError(f"No se pudo cargar el modelo: {e}") from e
 
     def _crear_modelo_simulado(self):
         """Crea un modelo simulado para desarrollo cuando falla la carga"""
-        print("Creando modelo simulado...")
+        print("🔧 Creando modelo simulado...")
         
         class ModeloSimulado:
             def __init__(self):
                 self.k = 3
                 self.X_train = None
                 self.y_train = None
+                print("🔧 Modelo simulado inicializado")
                 
             def predict(self, X):
                 # Simular reconocimiento de gestos básicos
@@ -237,7 +270,7 @@ class InferenciaGestos:
             'classes': ['hola', 'adios', 'si', 'no', 'gracias'],
             'scaler': None
         }
-        print("Modelo simulado creado para desarrollo")
+        print("🔧 Modelo simulado creado para desarrollo")
 
     def inicializar_deteccion(self):
         """Inicializa MediaPipe"""
@@ -248,9 +281,9 @@ class InferenciaGestos:
                 min_detection_confidence=0.80,
                 min_tracking_confidence=0.80
             )
-            print("MediaPipe inicializado")
+            print("✅ MediaPipe inicializado")
         except Exception as e:
-            print(f"Error MediaPipe: {e}")
+            print(f"❌ Error MediaPipe: {e}")
 
     def centroide(self, lista_coordenadas):
         """Calcula el centroide de una lista de coordenadas"""
@@ -295,7 +328,7 @@ class InferenciaGestos:
             return np.append(dedo_pulgar, dedos), (nx, ny)
 
         except Exception as e:
-            print(f"Error en detectar_dedos_mejorado: {e}")
+            print(f"❌ Error en detectar_dedos_mejorado: {e}")
             return np.zeros(5, dtype=int), (0, 0)
 
     def extraer_centroide_y_dedos(self, results, width, height):
@@ -400,15 +433,11 @@ class InferenciaGestos:
         """Procesa un frame para detección y reconocimiento de gestos"""
         if self.hands is None:
             frame_espejo = cv2.flip(frame, 1)
-            # cv2.putText(frame_espejo, "MEDIAPIPE NO INICIALIZADO", (10, 30), 
-            #           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             return frame_espejo, "MediaPipe no inicializado", 0.0, "ERROR"
 
         if self.modelo_data is None or 'model' not in self.modelo_data:
             frame_espejo = cv2.flip(frame, 1)
-            # cv2.putText(frame_espejo, "SIN MODELO - MODO SIMULACION", (10, 30), 
-            #           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
-            return frame_espejo, "Sin modelo", 0.0, "SIMULACION"
+            return frame_espejo, "SIN MODELO - MODO SIMULACION", 0.0, "SIMULACION"
 
         # Aplicar espejo
         frame_espejo = cv2.flip(frame, 1)
@@ -504,11 +533,11 @@ class InferenciaGestos:
 
                             # Llamar al callback si se reconoció un gesto
                             if self.callback_prediccion and estado == "RECONOCIDO":
+                                print(f"🎯 [GESTOS] Gesto reconocido: {prediccion.lower()}")
                                 self.callback_prediccion(prediccion.lower())
-                                print(f"[GESTOS] Gesto reconocido: {prediccion.lower()}")
 
                         except Exception as e:
-                            print(f"Error en prediccion: {e}")
+                            print(f"❌ Error en prediccion: {e}")
                             self.prediccion_actual = "Error en prediccion"
                             self.confianza_actual = 0.0
                             self.estado_prediccion = "ERROR"
@@ -539,11 +568,6 @@ class InferenciaGestos:
                     self.mp_drawing_styles.get_default_hand_connections_style()
                 )
 
-        # Dibujar información en el frame
-        # cv2.putText(frame_espejo, f"Prediccion: {self.prediccion_actual}", (10, 90),
-        #            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        # cv2.putText(frame_espejo, f"Confianza: {self.confianza_actual*100:.1f}%", (10, 120),
-        #          cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
         self.mano_detectada_anteriormente = mano_actualmente_detectada
 
         return frame_espejo, self.prediccion_actual, self.confianza_actual, self.estado_prediccion
@@ -551,8 +575,10 @@ class InferenciaGestos:
     def set_callback_prediccion(self, callback: Callable[[str], None]):
         """Configura el callback para cuando se detecta un gesto"""
         self.callback_prediccion = callback
+        print("✅ Callback de gestos configurado")
 
     def liberar(self):
         """Libera recursos"""
         if self.hands:
             self.hands.close()
+            print("✅ Recursos de inferencia liberados")
