@@ -379,6 +379,29 @@ class VentanaInteraccion(QMainWindow):
                 background: transparent;
             }}
         """
+        
+    def mostrar_indicador_concatenacion(self, mensaje: str):
+        """Muestra indicador de concatenación de dígitos"""
+        self.label_estado_gestos.show()
+        self._actualizar_estado_gestos(mensaje, "#3498db")
+
+    def actualizar_indicador_concatenacion(self, mensaje: str):
+        """Actualiza el indicador de concatenación"""
+        self._actualizar_estado_gestos(mensaje, "#3498db")
+
+    def ocultar_indicador_concatenacion(self):
+        """Oculta el indicador de concatenación"""
+        self.label_estado_gestos.hide()
+
+    def mostrar_error_digito_invalido(self):
+        """Muestra error cuando se detecta un gesto no numérico en estado numérico"""
+        # Mostrar error temporal
+        self._actualizar_estado_gestos("❌ Solo se aceptan dígitos (0-9)", "#e74c3c")
+        
+        # Programar para volver al estado normal después de 2 segundos
+        QTimer.singleShot(2000, lambda: self._actualizar_estado_gestos(
+            "Esperando dígitos...", "#3498db"
+        ))
 
     def mostrar_error_captura(self):
         """Muestra el error estándar de captura"""
@@ -473,6 +496,12 @@ class VentanaInteraccion(QMainWindow):
                 border: none;
             }}
         """)
+        
+        # Ajustar tamaño según contenido
+        fm = self.label_estado_gestos.fontMetrics()
+        text_width = fm.width(mensaje) + 20
+        self.label_estado_gestos.setFixedWidth(min(text_width, 400))
+        
         self._recolocar_estado_gestos()
 
     def _recolocar_estado_gestos(self):

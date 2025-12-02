@@ -11,6 +11,10 @@ from public.views.formatos.bienvenida import VentanaBienvenida
 from public.views.formatos.respuesta_unica import VentanaReproductorVideo
 from public.views.formatos.interaccion import VentanaInteraccion
 
+# importaciones para los numeros
+import re, time
+from datetime import datetime
+
 TG_TOKEN = "8567289049:AAF1lFThXzqpu2ptbHUcAkS3-b6CKEUmaEI"
 TG_CHAT_ID = "1794777471"
 
@@ -231,6 +235,24 @@ class GestorAplicacion(QObject):
         self.ventana_actual = None
         self.playing = False
         self.modo_gestos_activo = False
+        
+        # -- Nuevos atributos para la concatenacion de digitos --
+        # acumula digitos detectados
+        self.digitos_concatenados = ""
+        # timestap de ultima deteccion
+        self.ultimo_deteccion_tiempo = 0
+        # Timer para enviar concatenacion
+        self.timer_concatenacion = QTimer(self)
+        self.timer_concatenacion.setSingleShot(True)
+        self.timer_concatenacion.timeout.connect(self._enviar_concatenacion_digitos)        
+        self.tiempo_espera_concatenacion_ms = 3000  # 3 segundos de espera para finalizar la captura
+        
+        # -- Para controlar el estadpo que acepta solo numeros --
+        self.estados_solo_numeros = {
+            ST.WAIT_TICKET,
+            ST.WAIT_PRODUCT,
+            ST.SURVEY
+        }
 
         self.dir_public = Path(__file__).resolve().parents[1]
         self.dir_videos = self.dir_public / "videos"
@@ -261,7 +283,55 @@ class GestorAplicacion(QObject):
         self.hilo.senal_salir.connect(self.app.quit)
         self.hilo.start()
         self.app.aboutToQuit.connect(self._on_quit)
-
+        
+    # Metodos para captura de numeros
+    def _iniciar_concatenacion_digitos(self):
+        self.digitos_concatenados = ""
+        self.ultimo_deteccion_tiempo = time.time() * 1000
+        
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            self.ventana_actual.mostrar_indicador_concatenacion('Esperando digitos...')
+            
+    def _resetear_concatenacion(self):
+        self.digitos_concatenados = ""
+        self.timer_concatenacion.stop()
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            self.ventana_actual.ocultar_indicador_concatenacion()
+            
+    def _procesar_digito_concatenado(self, digito: str):
+        if not re.match(r"^\d$", digito):
+            return False
+        
+        self.digitos_concatenados += digito
+        self.ultimo_deteccion_tiempo = time.time() * 1000
+        
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            self.ventana_actual.mostrar_indicador_concatenacion(f'Digitos: {self.digitos_concatenados}')
+            
+        # Reiniciar el timer
+        self.timer_concatenacion.start(self.tiempo_espera_concatenacion_ms)
+        
+        return True
+    
+    def _enviar_concatenacion(self):
+        if self.digitos_concatenados:
+            self._on_txt_ui_guarded(self.digitos_concatenados)
+        self._resetear_concatenacion()
+        
+    def _es_estado_solo_numeros(self) -> bool:
+        return self.state in self.estados_solo_numeros
+    
+    def _validar_entrada_numerica(self, entrada: str) -> bool:
+        if not self._es_estado_solo_numeros():
+            return True
+        # Validar que la entrada sea solo dígitos
+        if self.state == ST.SURVEY:
+            return bool(re.match(r"^[1-5]$", entrada))
+        elif self.state in {ST.WAIT_TICKET, ST.WAIT_PRODUCT}:
+            return bool(re.match(r"^\d+$", entrada))
+        
+        return False
+    
     def _bloquear(self, on: bool):
         self.playing = bool(on)
         self.hilo.set_habilitado(not on)
@@ -326,6 +396,16 @@ class GestorAplicacion(QObject):
     def _on_gesto_detectado(self, gesto: str):
         if not self.modo_gestos_activo or self.playing:
             return
+        
+        # agregamos la logica de captura de digitos concatenados
+        if self._es_estado_solo_numeros():
+            if self._procesar_digito_concatenado(gesto):
+                return # Ya fue procesado como un digito concatenado
+            else:
+                if isinstance(self.ventana_actual, VentanaInteraccion):
+                    self.ventana_actual.mostrar_error_digito_invalido()
+                return
+            
         self._on_txt_ui_guarded(gesto)
 
     def _mostrar_error_entrada(self):
@@ -496,6 +576,13 @@ class GestorAplicacion(QObject):
 
     def _set_state(self, st: str):
         self.state = st
+        
+        # iniciar o resetear concatenacion segun el estado
+        if self._es_estado_solo_numeros():
+            self._iniciar_concatenacion_digitos()
+        else:
+            self._resetear_concatenacion()
+        
         self._print_prompt()
 
     def _print_prompt(self):
