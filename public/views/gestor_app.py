@@ -265,6 +265,13 @@ class GestorAplicacion(QObject):
     def _bloquear(self, on: bool):
         self.playing = bool(on)
         self.hilo.set_habilitado(not on)
+        
+        # agregando logica para el bloqueo de la deteccion de gestos
+        try:
+            self._activar_modo_gestos(not on)
+        except Exception:
+            pass
+                    
 
     def _on_quit(self):
         try:
