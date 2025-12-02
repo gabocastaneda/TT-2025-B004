@@ -3,24 +3,24 @@
     "idDescuento": 1,
     "Valor": 15.0,
     "Tipo": "Porcentaje",
-    "FechaInicio": "2025-10-01",
-    "FechaFin": "2025-10-31",
+    "FechaInicio": "225-10-01",
+    "FechaFin": "225-10-31",
     "Estado": "Activo"
   },
   "2": {
     "idDescuento": 2,
     "Valor": 50.0,
     "Tipo": "MontoFijo",
-    "FechaInicio": "2025-10-15",
-    "FechaFin": "2025-10-25",
+    "FechaInicio": "225-10-15",
+    "FechaFin": "225-10-25",
     "Estado": "Activo"
   },
   "3": {
     "idDescuento": 3,
     "Valor": 10.0,
     "Tipo": "Porcentaje",
-    "FechaInicio": "2025-09-01",
-    "FechaFin": "2025-09-30",
+    "FechaInicio": "225-09-01",
+    "FechaFin": "225-09-30",
     "Estado": "Inactivo"
   }
 }

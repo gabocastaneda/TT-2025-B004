@@ -47,7 +47,7 @@ class VentanaReproductorVideo(QMainWindow):
         else:
             self.barra.setStyleSheet("background: #8B1538;")
 
-        self.titulo = QLabel("TT 2025-B004", self)
+        self.titulo = QLabel("TT 225-B004", self)
         self.titulo.setAlignment(Qt.AlignCenter)
         self.titulo.setStyleSheet("background: transparent; color: white; letter-spacing: 3px;")
         self.titulo.setFont(QFont("Arial Black", 24, QFont.Bold))

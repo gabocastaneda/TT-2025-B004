@@ -87,7 +87,7 @@ class VentanaInteraccion(QMainWindow):
         else:
             self.barra.setStyleSheet("background: transparent;")
 
-        self.titulo = QLabel("TT 2025-B004", self)
+        self.titulo = QLabel("TT 225-B004", self)
         self.titulo.setAlignment(Qt.AlignCenter)
         self.titulo.setStyleSheet("color: white; letter-spacing: 3px;")
         self.titulo.setFont(QFont("Arial Black", 24, QFont.Bold))

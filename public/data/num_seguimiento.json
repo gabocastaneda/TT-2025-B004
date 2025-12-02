@@ -3,18 +3,18 @@
     "idCaso": 1,
     "idCliente": 1,
     "TipoCaso": "DUD",
-    "FechaCreacion": "2025-10-18 14:30:00"
+    "FechaCreacion": "225-10-18 14:30:00"
   },
   "2": {
     "idCaso": 2,
     "idCliente": 2,
     "TipoCaso": "DEV",
-    "FechaCreacion": "2025-10-19 10:15:00"
+    "FechaCreacion": "225-10-19 10:15:00"
   },
   "3": {
     "idCaso": 3,
     "idCliente": 1,
     "TipoCaso": "ACL",
-    "FechaCreacion": "2025-10-20 11:00:00"
+    "FechaCreacion": "225-10-20 11:00:00"
   }
 }

@@ -95,7 +95,7 @@ class VentanaBienvenida(QMainWindow):
             # Color sólido de respaldo (Guinda)
             self.barra_superior.setStyleSheet("background: #8B1538;")
 
-        self.etiqueta_titulo = QLabel("TT 2025-B004", self.barra_superior)
+        self.etiqueta_titulo = QLabel("TT 225-B004", self.barra_superior)
         self.etiqueta_titulo.setAlignment(Qt.AlignCenter)
         self.etiqueta_titulo.setStyleSheet("background: transparent; color: white; letter-spacing: 3px;")
         # Usando la misma fuente que interaccion.py para consistencia
