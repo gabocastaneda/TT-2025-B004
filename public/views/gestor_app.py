@@ -239,6 +239,10 @@ class GestorAplicacion(QObject):
         self.mapa = build_mapa_videos_interaccion(self.dir_videos)
 
         self.state = ST.MAIN
+        
+        # Contador de errores consecutivos para usabilidad
+        self.consecutive_errors = 0
+        
         self.context = {
             "branch": None,
             "razon": None,
@@ -273,6 +277,9 @@ class GestorAplicacion(QObject):
             if isinstance(win, VentanaInteraccion):
                 win.video_terminado.disconnect()
                 win.gesto_detectado.disconnect()
+                # Desconectar señales nuevas si existen
+                try: win.alerta_ayuda_terminada.disconnect()
+                except: pass
             elif isinstance(win, VentanaReproductorVideo):
                 win.transicion_solicitada.disconnect()
             elif isinstance(win, VentanaBienvenida):
@@ -317,6 +324,76 @@ class GestorAplicacion(QObject):
     def _mostrar_error_entrada(self):
         if isinstance(self.ventana_actual, VentanaInteraccion):
             self.ventana_actual.mostrar_error_captura()
+
+    def _handle_input_error(self):
+        """
+        Maneja el error de entrada. Si son 3 errores consecutivos,
+        lanza la alerta de usabilidad y reinicia.
+        """
+        self.consecutive_errors += 1
+        print(f"[DEBUG] Error input #{self.consecutive_errors}")
+
+        if self.consecutive_errors >= 3:
+            self._trigger_usability_alert()
+        else:
+            self._mostrar_error_entrada()
+            self._print_prompt()
+
+    def _reset_error_count(self):
+        """Resetea el contador de errores al tener una entrada exitosa"""
+        self.consecutive_errors = 0
+
+    def _trigger_usability_alert(self):
+        """
+        Ejecuta la lógica de falla crítica de usabilidad:
+        1. Envía reporte a Telegram con resumen.
+        2. Muestra mensaje especial en pantalla (bloqueante).
+        3. Reinicia la app.
+        """
+        print("\n!!! ALERTA DE USABILIDAD - 3 ERRORES CONSECUTIVOS !!!")
+        
+        # 1. Generar resumen y enviar a Telegram
+        resumen_texto = self._generar_texto_resumen_string()
+        
+        msg_telegram = (
+            "¡Alerta de usabilidad! Hay un usuario que no puede realizar su captura de opciones, "
+            "acude a apoyarlo.\n\n"
+            "--- RESUMEN HASTA EL MOMENTO ---\n"
+            f"{resumen_texto}"
+        )
+        self._enviar_telegram(msg_telegram)
+        
+        # 2. Mostrar alerta en pantalla y esperar reinicio
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            # Desconectamos señales normales para evitar interferencias
+            try: self.ventana_actual.gesto_detectado.disconnect()
+            except: pass
+            
+            # Conectamos la señal de terminación de alerta al reinicio
+            try: self.ventana_actual.alerta_ayuda_terminada.disconnect()
+            except: pass
+            
+            self.ventana_actual.alerta_ayuda_terminada.connect(self._reiniciar_app_completo)
+            
+            # Muestra el mensaje por 6 segundos (controlado por la vista)
+            self.ventana_actual.mostrar_alerta_ayuda_asociado()
+        else:
+            # Fallback si no estamos en ventana de interacción
+            QTimer.singleShot(6000, self._reiniciar_app_completo)
+
+    def _reiniciar_app_completo(self):
+        """Limpia todo el contexto y vuelve a la bienvenida"""
+        print("[SISTEMA] Reiniciando aplicación por alerta de usabilidad...")
+        self.consecutive_errors = 0
+        self.context = {
+            "branch": None,
+            "razon": None,
+            "ticket_num": None,
+            "ticket_bundle": None,
+            "productos": [],
+            "survey": None
+        }
+        self.mostrar_bienvenida()
 
     def _hook_interaccion(self, win: VentanaInteraccion):
         win.video_terminado.connect(self._on_video_finished)
@@ -449,78 +526,82 @@ class GestorAplicacion(QObject):
                 return
             if self.state == ST.SURVEY:
                 if 1 <= val <= 5:
+                    self._reset_error_count() # Exito
                     self.context["survey"] = val
                     self._mostrar_resumen_y_finalizar()
                 else:
-                    self._mostrar_error_entrada()
-                    self._print_prompt()
+                    self._handle_input_error() # Error
                 return
 
         # Lógica de estados de texto
         if self.state == ST.MAIN:
             if v in {"devolucion","devolución"}:
+                self._reset_error_count()
                 self.context = {k:None for k in self.context}
                 self.context["productos"] = []
                 self.context["branch"] = "devolucion"
                 self._enqueue_and_play(["resp11"], ST.DEV_MENU)
             else:
-                self._mostrar_error_entrada()
-                self._print_prompt()
+                self._handle_input_error()
 
         elif self.state == ST.DEV_MENU:
             if v == "producto":
+                self._reset_error_count()
                 self._enqueue_and_play(["resp12"], ST.DEV_REASON)
             elif v == "ninguno":
+                self._reset_error_count()
                 self._enqueue_and_play(["resp2","resp3"], ST.RESP3_NINGUNO)
             else:
-                self._mostrar_error_entrada()
-                self._print_prompt()
+                self._handle_input_error()
 
         elif self.state == ST.DEV_REASON:
             if v in {"danado","dañado","defecto","equivocacion","equivocación"}:
+                self._reset_error_count()
                 self.context["razon"] = v
                 self._enqueue_and_play(["resp9"], ST.ASK_TICKET_YN)
             else:
-                self._mostrar_error_entrada()
-                self._print_prompt()
+                self._handle_input_error()
 
         elif self.state == ST.ASK_TICKET_YN:
             if _yes(v):
+                self._reset_error_count()
                 self._enqueue_and_play(["resp10"], ST.WAIT_TICKET)
             elif _no(v):
+                self._reset_error_count()
                 self._enqueue_and_play(["resp6","resp3"], ST.RESP3_NO_TICKET)
             else:
-                self._mostrar_error_entrada()
-                self._print_prompt()
+                self._handle_input_error()
 
         elif self.state == ST.MORE_PRODUCT:
             if _yes(v):
+                self._reset_error_count()
                 bundle = self.context.get("ticket_bundle")
                 if bundle and isinstance(self.ventana_actual, VentanaInteraccion):
                     self._mostrar_secuencia_ticket_productos(bundle, ST.WAIT_PRODUCT)
                 else:
                     self._set_state(ST.WAIT_PRODUCT)
             elif _no(v):
+                self._reset_error_count()
                 self._enqueue_and_play(["resp4","resp8","resp3"], ST.RESP3_MAIN)
             else:
-                self._mostrar_error_entrada()
-                self._print_prompt()
+                self._handle_input_error()
 
         elif self.state in {ST.RESP3_MAIN, ST.RESP3_NINGUNO}:
             if _yes(v):
+                self._reset_error_count()
                 self._enqueue_and_play(["resp1"], ST.MAIN)
             elif _no(v):
+                self._reset_error_count()
                 self._enqueue_and_play(["resp5"], ST.SURVEY)
             else:
-                self._mostrar_error_entrada()
-                self._print_prompt()
+                self._handle_input_error()
         
         elif self.state == ST.RESP3_NO_TICKET:
              if _no(v):
+                self._reset_error_count()
                 self._enqueue_and_play(["resp4","resp5"], ST.SURVEY)
              else:
-                self._mostrar_error_entrada()
-                self._print_prompt()
+                self._handle_input_error()
         else:
             self._set_state(ST.MAIN)
 
@@ -588,10 +669,10 @@ class GestorAplicacion(QObject):
 
         if not bundle:
             print(f"[ERROR] No existe el ticket {num} en archivos locales.")
-            self._mostrar_error_entrada()
-            self._print_prompt()
+            self._handle_input_error()
             return
 
+        self._reset_error_count()
         self.context["ticket_num"] = num
         self.context["ticket_bundle"] = bundle
 
@@ -611,7 +692,7 @@ class GestorAplicacion(QObject):
     def _handle_product_number(self, prod_id: int):
         bundle = self.context.get("ticket_bundle")
         if not bundle:
-            self._mostrar_error_entrada()
+            self._handle_input_error()
             return
         
         prods_ticket = bundle.get("productos", [])
@@ -619,78 +700,71 @@ class GestorAplicacion(QObject):
         
         if not found:
             ids_validos = [p.get("id") for p in prods_ticket]
-            self._mostrar_error_entrada()
-            self._print_prompt()
+            self._handle_input_error()
             return
         
+        self._reset_error_count()
         self.context["productos"].append(prod_id)
         self._enqueue_and_play(["resp7"], ST.MORE_PRODUCT)
 
-    def _mostrar_resumen_y_finalizar(self):
+    def _generar_texto_resumen_string(self) -> str:
+        """
+        Genera el string del resumen para ser usado en reporte final y alertas.
+        """
         ctx = self.context
         bundle = ctx.get("ticket_bundle")
         ids_seleccionados = ctx.get("productos", [])
 
-        print("\n" + "═" * 70)
-        print(f"{'RESUMEN FINAL DE LA INTERACCIÓN':^70}")
-        print("═" * 70)
+        lineas = []
+        # 1. Datos Generales
+        lineas.append(f" 📌 OPERACIÓN:      {str(ctx.get('branch', 'General')).upper()}")
+        lineas.append(f" 📌 MOTIVO/RAZÓN:   {str(ctx.get('razon', 'N/A')).upper()}")
+        lineas.append(f" ⭐ CALIFICACIÓN:   {ctx.get('survey', 'N/A')}/5")
         
-        # 1. Opciones seleccionadas por el usuario y Encuesta
-        print(f" 📌 OPERACIÓN:      {str(ctx.get('branch', 'General')).upper()}")
-        print(f" 📌 MOTIVO/RAZÓN:   {str(ctx.get('razon', 'N/A')).upper()}")
-        print(f" ⭐ CALIFICACIÓN:   {ctx.get('survey', 'N/A')}/5")
-        
-        # 2. Información completa del ticket con resaltado
+        # 2. Información del Ticket
         if bundle:
-            print("-" * 70)
-            print(f" 🧾 TICKET #{bundle.get('ticket_num')} | 📅 {bundle.get('fecha')}")
-            print(f" 👤 CLIENTE: {bundle.get('cliente', {}).get('Nombre', 'Desconocido')}")
-            print("-" * 70)
+            lineas.append("-" * 40)
+            lineas.append(f" 🧾 TICKET #{bundle.get('ticket_num')} | {bundle.get('fecha')}")
+            nom_cliente = bundle.get('cliente', {}).get('Nombre', 'N/A')
+            lineas.append(f" 👤 CLIENTE: {nom_cliente[:30]}")
+            lineas.append("-" * 40)
             
-            # Encabezados de tabla
-            print(f" {'ID':<6} | {'PRODUCTO':<32} | {'PRECIO':>10} | {'ESTADO'}")
-            print("-" * 70)
-
+            lineas.append(f" {'ID':<6} | {'PRODUCTO':<20} | ESTADO")
+            
             for prod in bundle.get("productos", []):
                 p_id = prod.get('id')
-                nombre = prod.get('NombreProducto', 'Sin nombre')[:30] # Truncar si es muy largo
-                precio = prod.get('PrecioVenta', 0.0)
-                
-                # Lógica de resaltado
+                nombre = prod.get('NombreProducto', 'Sin nombre')[:20]
                 es_seleccionado = p_id in ids_seleccionados
-                
-                marcador_izq = ">>" if es_seleccionado else "  "
-                marcador_der = " <-- [OBJETO DEL TRÁMITE]" if es_seleccionado else ""
-                
-                # Renderizado de la fila
-                print(f" {marcador_izq:<2} {str(p_id):<6} | {nombre:<32} | ${precio:>9.2f} |{marcador_der}")
+                m_der = " <-- [OBJETO]" if es_seleccionado else ""
+                lineas.append(f" {str(p_id):<6} | {nombre:<20} |{m_der}")
 
-            print("-" * 70)
-            print(f" TOTAL TICKET: ${bundle.get('total', 0.0):.2f}")
+            lineas.append("-" * 40)
+            lineas.append(f" TOTAL: ${bundle.get('total', 0.0):.2f}")
         else:
-            print(" [!] No se cargó información detallada del ticket en esta sesión.")
+            lineas.append(" [!] Sin información de ticket asociada.")
             
-        print("═" * 70 + "\n")
+        return "\n".join(lineas)
+
+    def _mostrar_resumen_y_finalizar(self):
+        cuerpo_resumen = self._generar_texto_resumen_string()
         
-        # Reinicio del contexto para la siguiente interacción
-        self.context = {
-            "branch": None,
-            "razon": None,
-            "ticket_num": None,
-            "ticket_bundle": None,
-            "productos": [],
-            "survey": None
-        }
-        # Regresar al video de 'Bienvenida' o Menú Principal
-        self._enqueue_and_play(["resp1"], ST.MAIN)
-        print("\n╔════════════════════════════════════════════════════════╗")
-        print("║          RESUMEN DE INTERACCIÓN                        ║")
-        print("╚════════════════════════════════════════════════════════╝")
-        print(f"  Ticket:    {self.context.get('ticket_num')}")
-        print(f"  Prod. IDs: {self.context.get('productos')}")
-        print(f"  Encuesta:  {self.context.get('survey')}/5")
-        print("╚════════════════════════════════════════════════════════╝\n")
+        lineas = []
+        lineas.append("═" * 60)
+        lineas.append(f"{'RESUMEN FINAL DE LA INTERACCIÓN':^60}")
+        lineas.append("═" * 60)
+        lineas.append(cuerpo_resumen)
+        lineas.append("═" * 60)
         
+        mensaje_completo = "\n".join(lineas)
+
+        # 1. Imprimir en consola local
+        print("\n" + mensaje_completo + "\n")
+
+        # 2. Enviar a Telegram
+        self._enviar_telegram(mensaje_completo)
+        
+        # --- Limpieza y Reinicio ---
+        self.consecutive_errors = 0
         self.context = {
             "branch": None,
             "razon": None,
@@ -732,9 +806,6 @@ class GestorAplicacion(QObject):
         self.mostrar_bienvenida()
         sys.exit(self.app.exec_())
     
-    # --------------------------------------------------------------------------
-    # NUEVO MÉTODO AUXILIAR: Enviar a Telegram
-    # --------------------------------------------------------------------------
     def _enviar_telegram(self, mensaje_texto):
         """Envía el texto formateado al bot de Telegram configurado."""
         if not TG_TOKEN or not TG_CHAT_ID:
@@ -743,91 +814,16 @@ class GestorAplicacion(QObject):
 
         url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
         
-        # Envolvemos el mensaje en etiquetas de código (```) para que Telegram
-        # respete el formato de tabla y la fuente monoespaciada.
         texto_formateado = f"```text\n{mensaje_texto}\n```"
 
         payload = {
             "chat_id": TG_CHAT_ID,
             "text": texto_formateado,
-            "parse_mode": "MarkdownV2" # Importante para que se vea como bloque de código
+            "parse_mode": "MarkdownV2"
         }
         
         try:
-            # Enviamos en un hilo o con timeout corto para no congelar la UI si falla internet
             requests.post(url, json=payload, timeout=3)
             print("[Telegram] Reporte enviado correctamente.")
         except Exception as e:
             print(f"[Telegram] Error al enviar reporte: {e}")
-
-    # --------------------------------------------------------------------------
-    # MÉTODO ACTUALIZADO: Construye string, imprime y envía
-    # --------------------------------------------------------------------------
-    def _mostrar_resumen_y_finalizar(self):
-        ctx = self.context
-        bundle = ctx.get("ticket_bundle")
-        ids_seleccionados = ctx.get("productos", [])
-
-        # Construimos el mensaje línea por línea en una lista para manejarlo limpio
-        lineas = []
-        lineas.append("═" * 60)
-        lineas.append(f"{'RESUMEN FINAL DE LA INTERACCIÓN':^60}")
-        lineas.append("═" * 60)
-        
-        # 1. Datos Generales
-        lineas.append(f" 📌 OPERACIÓN:      {str(ctx.get('branch', 'General')).upper()}")
-        lineas.append(f" 📌 MOTIVO/RAZÓN:   {str(ctx.get('razon', 'N/A')).upper()}")
-        lineas.append(f" ⭐ CALIFICACIÓN:   {ctx.get('survey', 'N/A')}/5")
-        
-        # 2. Información del Ticket
-        if bundle:
-            lineas.append("-" * 60)
-            lineas.append(f" 🧾 TICKET #{bundle.get('ticket_num')} | 📅 {bundle.get('fecha')}")
-            nom_cliente = bundle.get('cliente', {}).get('Nombre', 'N/A')
-            # Si el nombre es muy largo, lo cortamos para que no rompa la tabla
-            lineas.append(f" 👤 CLIENTE: {nom_cliente[:40]}")
-            lineas.append("-" * 60)
-            
-            # Encabezados
-            lineas.append(f" {'ID':<6} | {'PRODUCTO':<23} | {'PRECIO':>9} | ESTADO")
-            lineas.append("-" * 60)
-
-            for prod in bundle.get("productos", []):
-                p_id = prod.get('id')
-                nombre = prod.get('NombreProducto', 'Sin nombre')[:23]
-                precio = prod.get('PrecioVenta', 0.0)
-                
-                es_seleccionado = p_id in ids_seleccionados
-                
-                # Definición de marcadores visuales
-                m_izq = ">>" if es_seleccionado else "  "
-                m_der = " <-- [OBJETO]" if es_seleccionado else ""
-                
-                lineas.append(f" {m_izq:<2} {str(p_id):<6} | {nombre:<23} | ${precio:>8.2f} |{m_der}")
-
-            lineas.append("-" * 60)
-            lineas.append(f" TOTAL TICKET: ${bundle.get('total', 0.0):.2f}")
-        else:
-            lineas.append(" [!] Sin información de ticket asociada.")
-            
-        lineas.append("═" * 60)
-        
-        # Unimos todo en un solo string
-        mensaje_completo = "\n".join(lineas)
-
-        # 1. Imprimir en consola local (como antes)
-        print("\n" + mensaje_completo + "\n")
-
-        # 2. Enviar a Telegram
-        self._enviar_telegram(mensaje_completo)
-        
-        # --- Limpieza y Reinicio ---
-        self.context = {
-            "branch": None,
-            "razon": None,
-            "ticket_num": None,
-            "ticket_bundle": None,
-            "productos": [],
-            "survey": None
-        }
-        self._enqueue_and_play(["resp1"], ST.MAIN)
