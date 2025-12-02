@@ -10,7 +10,7 @@ if str(_REPO_ROOT) not in sys.path:
 from backend.repo_tickets import fetch_ticket_bundle, render_ticket_text
 
 if __name__ == "__main__":
-    # Elige un ticket que sí exista (tu dump mostró 1001 y 1002)
+    # Elige un ticket que sí exista (tu dump mostró 1001 y 112)
     num = 1001
     bundle = fetch_ticket_bundle(num)
     if not bundle:

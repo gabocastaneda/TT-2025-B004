@@ -96,24 +96,24 @@ def crear_json_database():
             "idDescuento": 1,
             "Valor": 15.00,
             "Tipo": "Porcentaje",
-            "FechaInicio": "2025-10-01",
-            "FechaFin": "2025-10-31",
+            "FechaInicio": "225-10-01",
+            "FechaFin": "225-10-31",
             "Estado": "Activo"
         },
         "2": {
             "idDescuento": 2,
             "Valor": 50.00,
             "Tipo": "MontoFijo",
-            "FechaInicio": "2025-10-15",
-            "FechaFin": "2025-10-25",
+            "FechaInicio": "225-10-15",
+            "FechaFin": "225-10-25",
             "Estado": "Activo"
         },
         "3": {
             "idDescuento": 3,
             "Valor": 10.00,
             "Tipo": "Porcentaje",
-            "FechaInicio": "2025-09-01",
-            "FechaFin": "2025-09-30",
+            "FechaInicio": "225-09-01",
+            "FechaFin": "225-09-30",
             "Estado": "Inactivo"
         }
     }
@@ -130,8 +130,8 @@ def crear_json_database():
             "idDescuento": 2,
             "ImagenURL": "productos/tv_led_50.jpg"
         },
-        "102": {
-            "idProducto": 102,
+        "12": {
+            "idProducto": 12,
             "NombreProducto": "Laptop Gamer",
             "PrecioProducto": 22000.00,
             "Descripcion": "Laptop con tarjeta gráfica dedicada",
@@ -170,8 +170,8 @@ def crear_json_database():
             "idDescuento": 2,
             "ImagenURL": "productos/teclado_rgb.jpg"
         },
-        "201": {
-            "idProducto": 201,
+        "21": {
+            "idProducto": 21,
             "NombreProducto": "Camisa de Lino",
             "PrecioProducto": 750.00,
             "Descripcion": "Camisa casual manga larga",
@@ -180,8 +180,8 @@ def crear_json_database():
             "idDescuento": 1,
             "ImagenURL": "productos/camisa_lino.jpg"
         },
-        "202": {
-            "idProducto": 202,
+        "22": {
+            "idProducto": 22,
             "NombreProducto": "Zapatos de Piel",
             "PrecioProducto": 1200.00,
             "Descripcion": "Zapatos formales color negro",
@@ -313,7 +313,7 @@ def crear_json_database():
         },
         "2": {
             "idCliente": 2,
-            "RFCCliente": "GAML880202BB2",
+            "RFCCliente": "GAML88022BB2",
             "Direccion": "Av. Siempre Viva 742",
             "TelefonoCliente": "5587654321",
             "CorreoCliente": "ana.garcia@email.com"
@@ -331,12 +331,12 @@ def crear_json_database():
     tickets = {
         "1001": {
             "NumTicket": 1001,
-            "FechaCompra": "2025-10-20 13:45:10",
+            "FechaCompra": "225-10-20 13:45:10",
             "idCliente": 1
         },
-        "1002": {
-            "NumTicket": 1002,
-            "FechaCompra": "2025-10-20 15:10:25",
+        "112": {
+            "NumTicket": 112,
+            "FechaCompra": "225-10-20 15:10:25",
             "idCliente": 2
         }
     }
@@ -353,30 +353,30 @@ def crear_json_database():
         "2": {
             "idTicketDetalle": 2,
             "NumTicket": 1001,
-            "idProducto": 201,
+            "idProducto": 21,
             "Cantidad": 2,
             "PrecioVenta": 637.50
         },
         "3": {
             "idTicketDetalle": 3,
-            "NumTicket": 1002,
-            "idProducto": 102,
+            "NumTicket": 112,
+            "idProducto": 12,
             "Cantidad": 1,
             "PrecioVenta": 22000.00
         },
         "4": {
             "idTicketDetalle": 4,
-            "NumTicket": 1002,
-            "idProducto": 201,
+            "NumTicket": 112,
+            "idProducto": 21,
             "Cantidad": 1,
             "PrecioVenta": 637.50
         },
         "5": {
             "idTicketDetalle": 5,
-            "NumTicket": 1002,
-            "idProducto": 202,
+            "NumTicket": 112,
+            "idProducto": 22,
             "Cantidad": 1,
-            "PrecioVenta": 1020.00
+            "PrecioVenta": 120.00
         }
     }
     
@@ -386,19 +386,19 @@ def crear_json_database():
             "idCaso": 1,
             "idCliente": 1,
             "TipoCaso": "DUD",
-            "FechaCreacion": "2025-10-18 14:30:00"
+            "FechaCreacion": "225-10-18 14:30:00"
         },
         "2": {
             "idCaso": 2,
             "idCliente": 2,
             "TipoCaso": "DEV",
-            "FechaCreacion": "2025-10-19 10:15:00"
+            "FechaCreacion": "225-10-19 10:15:00"
         },
         "3": {
             "idCaso": 3,
             "idCliente": 1,
             "TipoCaso": "ACL",
-            "FechaCreacion": "2025-10-20 11:00:00"
+            "FechaCreacion": "225-10-20 11:00:00"
         }
     }
     
