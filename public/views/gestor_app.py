@@ -267,11 +267,11 @@ class GestorAplicacion(QObject):
         self.hilo.set_habilitado(not on)
         
         # agregando logica para el bloqueo de la deteccion de gestos
-        try:
-            self._activar_modo_gestos(not on)
-        except Exception:
-            pass
-                    
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            if on:
+                self.ventana_actual.bloquear_terminal()
+            else:
+                self.ventana_actual.desbloquear_terminal()
 
     def _on_quit(self):
         try:
@@ -404,7 +404,12 @@ class GestorAplicacion(QObject):
 
     def _hook_interaccion(self, win: VentanaInteraccion):
         win.video_terminado.connect(self._on_video_finished)
-        self._activar_modo_gestos(True)
+        if self.playing:
+            # si esta reproduciendo, bloquear terminal
+            win.bloquear_terminal()
+        else:
+            # Si no esta reproduciendo, desbloquear terminal
+            win.desbloquear_terminal()
 
     def _hook_unica(self, win: VentanaReproductorVideo):
         win.transicion_solicitada.connect(self._on_video_finished)
@@ -454,6 +459,7 @@ class GestorAplicacion(QObject):
         if isinstance(self.ventana_actual, VentanaInteraccion):
             try:
                 self.ventana_actual.set_modo_reproduccion(False)
+                self.ventana_actual.desbloquear_terminal()
                 self._activar_modo_gestos(True)
             except Exception as e:
                 pass
@@ -623,6 +629,8 @@ class GestorAplicacion(QObject):
         self._bloquear(True)
         # --- ACTIVAR MODO REPRODUCCION: Oculta banner verde, muestra rojo ---
         self.ventana_actual.set_modo_reproduccion(True)
+        # IMPORTANTE: bloquear terminal durante la secuencia
+        self.ventana_actual.bloquear_terminal()
         
         productos = bundle.get("productos", [])
         indice_actual = [0]
@@ -642,6 +650,10 @@ class GestorAplicacion(QObject):
                 self._bloquear(False)
                 # --- DESACTIVAR MODO REPRODUCCION: Muestra banner verde para captura ---
                 self.ventana_actual.set_modo_reproduccion(False)
+                
+                # IMPORTANTE: desbloquear terminal al finalizar la secuencia
+                self.ventana_actual.desbloquear_terminal()
+                
                 self._set_state(next_state)
                 return
             

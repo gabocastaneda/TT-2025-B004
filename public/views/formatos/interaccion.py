@@ -26,12 +26,17 @@ class VentanaInteraccion(QMainWindow):
     
     # NUEVA SEÑAL: Se emite cuando termina el tiempo de la alerta de ayuda (6s)
     alerta_ayuda_terminada = pyqtSignal()
+    
+    
 
     def __init__(self, src_inicial: Optional[str] = None):
         super().__init__()
         self.setWindowTitle("Interacción")
         self.resize(1280, 720)
 
+        # Control de estado para el bloqueo
+        self.terminal_bloqueada = True
+        
         # Paths
         self.dir_root = Path(__file__).resolve().parents[3]
         self.dir_public = self.dir_root / "public"
@@ -301,6 +306,20 @@ class VentanaInteraccion(QMainWindow):
         print(f"📁 Modelo: {'✅ EXISTE' if modelo_path.exists() else '❌ NO EXISTE'}")
         print("="*50)
 
+    def bloquear_terminal(self):
+        self.terminal_bloqueada = True
+        self.set_modo_gestos(False)
+        
+    def desbloquear_terminal(self):
+        self.terminal_bloqueada = False
+        self.set_modo_gestos(True)
+        
+    def cambiar_estado_terminal(self, bloqueada: bool):
+        if bloqueada:
+            self.bloquear_terminal()
+        else:
+            self.desbloquear_terminal()
+
     def _inicializar_inferencia_gestos_estricta(self):
         try:
             modelo_path = self.dir_backend / "modelo.pkl"
@@ -429,10 +448,12 @@ class VentanaInteraccion(QMainWindow):
         if self.inferencia is None:
             return
             
+        if self.terminal_bloqueada:
+            activar = False
+            
         self.modo_gestos = activar
         if activar:
             self.label_estado_gestos.show()
-            self._actualizar_estado_gestos("🟢 LISTO - Mostrando manos", "#27ae60")
         else:
             self.label_estado_gestos.hide()
 
@@ -475,7 +496,11 @@ class VentanaInteraccion(QMainWindow):
             estado_mensaje = "Cámara activa"
             color_estado = "#3498db"
             
-            if self.modo_gestos and self.inferencia:
+            if self.terminal_bloqueada:
+                estado_mensaje = "🔒 Terminal bloqueada"
+                self.label_estado_gestos.hide()
+                
+            elif self.modo_gestos and self.inferencia:
                 try:
                     frame_procesado, pred, conf, estado = self.inferencia.procesar_frame(frame)
                     
@@ -504,9 +529,10 @@ class VentanaInteraccion(QMainWindow):
                     color_estado = "#e74c3c"
             else:
                 frame_procesado = cv2.flip(frame, 1)
-                if self.modo_gestos:
-                    estado_mensaje = "⏸️ Gestos desactivados"
-                    color_estado = "#95a5a6"
+                if not self.modo_gestos:
+                    self.label_estado_gestos.hide()
+                    estado_mensaje = ""
+                    color_estado = ""
 
             self._actualizar_estado_gestos(estado_mensaje, color_estado)
 
@@ -686,8 +712,13 @@ class VentanaInteraccion(QMainWindow):
 
     def set_modo_reproduccion(self, on: bool):
         self._modo_reproduccion = bool(on)
+        # bloquear siempre modo gestos
+        if on:
+            self.set_modo_gestos(False)
+            
         self.banner_rojo.setVisible(self._modo_reproduccion)
         self.banner_verde.setVisible(not self._modo_reproduccion)
+        self.set_modo_gestos(True)
         self._recolocar()
 
     def resizeEvent(self, ev):
