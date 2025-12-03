@@ -231,6 +231,30 @@ class GestorAplicacion(QObject):
         self.ventana_actual = None
         self.playing = False
         self.modo_gestos_activo = False
+<<<<<<< HEAD
+=======
+        
+        # -- Nuevos atributos para la concatenacion de digitos --
+        # acumula digitos detectados
+        self.digitos_concatenados = ""
+        # timestap de ultima deteccion
+        self.ultimo_deteccion_tiempo = 0
+        # Timer para enviar concatenacion
+        self.timer_concatenacion = QTimer(self)
+        self.timer_concatenacion.setSingleShot(True)
+        self.timer_concatenacion.timeout.connect(self._enviar_concatenacion_digitos)        
+        self.tiempo_espera_concatenacion_ms = 3000  # 3 segundos de espera para finalizar la captura
+        
+        # -- Para controlar el estadpo que acepta solo numeros --
+        self.estados_solo_numeros = {
+            ST.WAIT_TICKET,
+            ST.WAIT_PRODUCT,
+            ST.SURVEY
+        }
+        
+        # 🆕 Contador global de notificaciones para Telegram
+        self.notificacion_counter = 0
+>>>>>>> 73985ed (!feat- Numero de Seguimiento en Resúmenes)
 
         self.dir_public = Path(__file__).resolve().parents[1]
         self.dir_videos = self.dir_public / "videos"
@@ -261,7 +285,65 @@ class GestorAplicacion(QObject):
         self.hilo.senal_salir.connect(self.app.quit)
         self.hilo.start()
         self.app.aboutToQuit.connect(self._on_quit)
+<<<<<<< HEAD
 
+=======
+        
+    # Metodos para captura de numeros
+    def _iniciar_concatenacion_digitos(self):
+        self.digitos_concatenados = ""
+        self.ultimo_deteccion_tiempo = time.time() * 1000
+        
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            self.ventana_actual.mostrar_indicador_concatenacion('Esperando digitos...')
+            
+    def _resetear_concatenacion(self):
+        self.digitos_concatenados = ""
+        self.timer_concatenacion.stop()
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            self.ventana_actual.ocultar_indicador_concatenacion()
+            
+    def _procesar_digito_concatenado(self, digito: str):
+        if not re.match(r"^\d$", digito):
+            return False
+        
+        self.digitos_concatenados += digito
+        self.ultimo_deteccion_tiempo = time.time() * 1000
+        
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            self.ventana_actual.mostrar_indicador_concatenacion(f'Digitos: {self.digitos_concatenados}')
+            
+        # Reiniciar el timer
+        self.timer_concatenacion.start(self.tiempo_espera_concatenacion_ms)
+        
+        return True
+    
+    def _enviar_concatenacion_digitos(self):
+        """Método llamado por el timer cuando se termina el tiempo de espera."""
+        if self.digitos_concatenados:
+            print(f"[CONCAT] Enviando dígitos acumulados: {self.digitos_concatenados}")
+            self._on_txt_ui_guarded(self.digitos_concatenados)
+        self._resetear_concatenacion()
+    
+    def _enviar_concatenacion(self):
+        # Alias por compatibilidad si es necesario, pero el timer usa _enviar_concatenacion_digitos
+        self._enviar_concatenacion_digitos()
+        
+    def _es_estado_solo_numeros(self) -> bool:
+        return self.state in self.estados_solo_numeros
+    
+    def _validar_entrada_numerica(self, entrada: str) -> bool:
+        if not self._es_estado_solo_numeros():
+            return True
+        # Validar que la entrada sea solo dígitos
+        if self.state == ST.SURVEY:
+            return bool(re.match(r"^[1-5]$", entrada))
+        elif self.state in {ST.WAIT_TICKET, ST.WAIT_PRODUCT}:
+            return bool(re.match(r"^\d+$", entrada))
+        
+        return False
+    
+>>>>>>> 73985ed (!feat- Numero de Seguimiento en Resúmenes)
     def _bloquear(self, on: bool):
         self.playing = bool(on)
         self.hilo.set_habilitado(not on)
@@ -349,28 +431,53 @@ class GestorAplicacion(QObject):
     def _reset_error_count(self):
         """Resetea el contador de errores al tener una entrada exitosa"""
         self.consecutive_errors = 0
+        
+    def _get_descripcion_estado_actual(self) -> str:
+        """Retorna una descripción legible del estado (pregunta) donde se encuentra el usuario."""
+        descripciones = {
+            ST.MAIN: "Menú Principal (Facturación/Devolución/Dudas)",
+            ST.DEV_MENU: "Selección de tipo Devolución (Producto vs Ninguno)",
+            ST.DEV_REASON: "Selección de Razón de Devolución",
+            ST.ASK_TICKET_YN: "Pregunta: ¿Cuenta con Ticket?",
+            ST.WAIT_TICKET: "Esperando captura de Número de Ticket",
+            ST.WAIT_PRODUCT: "Esperando captura de ID Producto",
+            ST.MORE_PRODUCT: "Pregunta: ¿Más productos?",
+            ST.RESP3_MAIN: "Pregunta: ¿Ayuda en algo más? (General)",
+            ST.RESP3_NINGUNO: "Pregunta: ¿Ayuda en algo más? (Post-Ninguno)",
+            ST.RESP3_NO_TICKET: "Pregunta: ¿Ir a encuesta? (Sin ticket)",
+            ST.SURVEY: "Encuesta de Satisfacción (1-5)"
+        }
+        return descripciones.get(self.state, f"Estado desconocido ({self.state})")
 
     def _trigger_usability_alert(self):
         """
         Ejecuta la lógica de falla crítica de usabilidad:
-        1. Envía reporte a Telegram con resumen.
+        1. Envía reporte a Telegram con resumen, seguimiento e ID de pregunta fallida.
         2. Muestra mensaje especial en pantalla (bloqueante).
         3. Reinicia la app.
         """
         print("\n!!! ALERTA DE USABILIDAD - 3 ERRORES CONSECUTIVOS !!!")
         
-        # 1. Generar resumen y enviar a Telegram
+        # 1. Incrementar contador de seguimiento
+        self.notificacion_counter += 1
+        
+        # Obtener descripción del paso donde se quedó varado
+        paso_detenido = self._get_descripcion_estado_actual()
+        
+        # 2. Generar resumen y enviar a Telegram
         resumen_texto = self._generar_texto_resumen_string()
         
         msg_telegram = (
-            "¡Alerta de usabilidad! Hay un usuario que no puede realizar su captura de opciones, "
-            "acude a apoyarlo.\n\n"
-            "--- RESUMEN HASTA EL MOMENTO ---\n"
+            f"🚨 APOYO EN CAPTURA DE SISTEMA 🚨\n"
+            f"📦 SEGUIMIENTO: #{self.notificacion_counter:04d}\n"
+            f"📍 DETENIDO EN: {paso_detenido}\n\n"
+            f"⚠️ El usuario ha fallado 3 veces consecutivas en este paso.\n\n"
+            f"--- RESUMEN HASTA EL MOMENTO ---\n"
             f"{resumen_texto}"
         )
         self._enviar_telegram(msg_telegram)
         
-        # 2. Mostrar alerta en pantalla y esperar reinicio
+        # 3. Mostrar alerta en pantalla y esperar reinicio
         if isinstance(self.ventana_actual, VentanaInteraccion):
             # Desconectamos señales normales para evitar interferencias
             try: self.ventana_actual.gesto_detectado.disconnect()
@@ -765,21 +872,25 @@ class GestorAplicacion(QObject):
         return "\n".join(lineas)
 
     def _mostrar_resumen_y_finalizar(self):
+        # 1. Incrementar contador de notificaciones para seguimiento
+        self.notificacion_counter += 1
+        
         cuerpo_resumen = self._generar_texto_resumen_string()
         
         lineas = []
-        lineas.append("═" * 60)
-        lineas.append(f"{'RESUMEN FINAL DE LA INTERACCIÓN':^60}")
+        lineas.append("✅ RESUMEN FINAL DE LA INTERACCIÓN")
+        # 2. Agregar número de seguimiento
+        lineas.append(f"📦 SEGUIMIENTO: #{self.notificacion_counter:04d}")
         lineas.append("═" * 60)
         lineas.append(cuerpo_resumen)
         lineas.append("═" * 60)
         
         mensaje_completo = "\n".join(lineas)
 
-        # 1. Imprimir en consola local
+        # 3. Imprimir en consola local
         print("\n" + mensaje_completo + "\n")
 
-        # 2. Enviar a Telegram
+        # 4. Enviar a Telegram
         self._enviar_telegram(mensaje_completo)
         
         # --- Limpieza y Reinicio ---
@@ -843,6 +954,7 @@ class GestorAplicacion(QObject):
         
         try:
             requests.post(url, json=payload, timeout=3)
-            print("[Telegram] Reporte enviado correctamente.")
+            # Imprimir confirmación con número de seguimiento para depuración
+            print(f"[Telegram] Reporte #{self.notificacion_counter} enviado correctamente.")
         except Exception as e:
             print(f"[Telegram] Error al enviar reporte: {e}")
