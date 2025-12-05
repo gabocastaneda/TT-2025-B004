@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from public.views.hilo_video import HiloVideo
 
 class VentanaReproductorVideo(QMainWindow):
+    # DEFINICIÓN DE SEÑALES (Deben estar aquí, fuera del __init__)
     redimensionada = pyqtSignal()
     transicion_solicitada = pyqtSignal()
 
@@ -36,82 +37,86 @@ class VentanaReproductorVideo(QMainWindow):
                 }}
             """)
         else:
-            self.setStyleSheet("QMainWindow { background: #2c3e50; }")
+            self.setStyleSheet("background-color: #2c3e50;")
 
-        # --- Barra superior (Imagen ajustable) ---
+        self._init_ui()
+
+    def _init_ui(self):
+        # 1. Barra Superior
         self.barra = QLabel(self)
         barra_path = self.dir_images / "barra.png"
         if barra_path.exists():
-            img_url = str(barra_path).replace("\\", "/")
-            self.barra.setStyleSheet(f"border-image: url({img_url}) 0 0 0 0 stretch stretch; border: none;")
+            self.barra.setStyleSheet(f"border-image: url({str(barra_path).replace(chr(92), '/')}) 0 0 0 0 stretch stretch; border: none;")
         else:
-            self.barra.setStyleSheet("background: #8B1538;")
-
-        self.titulo = QLabel("TT 225-B004", self)
+            self.barra.setStyleSheet("background: #8B1538;") # Color institucional alternativo
+            
+        self.titulo = QLabel("ATENCIÓN AL CLIENTE", self)
         self.titulo.setAlignment(Qt.AlignCenter)
-        self.titulo.setStyleSheet("background: transparent; color: white; letter-spacing: 3px;")
-        self.titulo.setFont(QFont("Arial Black", 24, QFont.Bold))
+        self.titulo.setStyleSheet("background: transparent; color: white; letter-spacing: 2px;")
+        self.titulo.setFont(QFont("Arial", 20, QFont.Bold))
 
-        # --- Recuadro Video (Marco Dorado) ---
+        # 2. Marco del Video
         self.recuadro = QFrame(self)
         self.recuadro.setStyleSheet("""
             QFrame {
-                background: transparent;
-                border: 8px solid #e7c14d;
-                border-radius: 20px;
+                background: black;
+                border: 5px solid #e7c14d; /* Dorado */
+                border-radius: 15px;
             }
         """)
-
-        # --- Vista del Video (Interior negro) ---
+        
         self.view = QLabel(self.recuadro)
         self.view.setAlignment(Qt.AlignCenter)
-        self.view.setStyleSheet("""
-            QLabel {
-                background: black;
-                color: white;
-                border: none;
-                border-radius: 12px;
-            }
-        """)
+        self.view.setStyleSheet("background: transparent; border: none;")
+        self.view.setScaledContents(True)
 
-        # Inicializar geometría y video
-        self._recolocar()
-        self.iniciar()
+        self._recolocar_elementos()
+        
+        # Iniciar video automáticamente
+        QTimer.singleShot(100, self.iniciar)
 
     def resizeEvent(self, event):
-        self._recolocar()
+        self._recolocar_elementos()
+        self.redimensionada.emit()
         super().resizeEvent(event)
 
-    def _recolocar(self):
-        """Calcula dimensiones dinámicas para maximizar el video"""
+    def _recolocar_elementos(self):
         w = self.width()
         h = self.height()
-        
-        # Barra superior (10% de la altura)
+
+        # Barra superior (10% alto)
         alto_barra = int(h * 0.1)
         self.barra.setGeometry(0, 0, w, alto_barra)
         self.titulo.setGeometry(0, 0, w, alto_barra)
 
-        # Área disponible debajo de la barra
-        area_h = h - alto_barra
+        # Recuadro Video (Centrado)
+        area_y = alto_barra + 20
+        area_h = h - area_y - 40
+        area_w = w - 80
         
-        # El video ocupará el 80% del ancho total y el 85% de la altura disponible
-        vid_w = int(w * 0.80)
-        vid_h = int(area_h * 0.85)
+        # Aspect Ratio 16:9
+        target_h = area_h
+        target_w = int(target_h * (16/9))
         
-        # Centrar el recuadro
+        if target_w > area_w:
+            target_w = area_w
+            target_h = int(target_w * (9/16))
+            
+        vid_w = target_w
+        vid_h = target_h
+        
         x_pos = (w - vid_w) // 2
         y_pos = alto_barra + (area_h - vid_h) // 2
         
         self.recuadro.setGeometry(x_pos, y_pos, vid_w, vid_h)
         
-        # El label interno con un pequeño margen para que no choque con el borde curvo
+        # El label interno con un pequeño margen
         margen = 10
         self.view.setGeometry(margen, margen, vid_w - (margen*2), vid_h - (margen*2))
 
     def iniciar(self):
         if not self.ruta_video or not Path(self.ruta_video).is_file():
-            self.view.setText("Sin video. Continuando…")
+            self.view.setText("Sin video. Continuando...")
             QTimer.singleShot(2000, self.transicion_solicitada.emit)
             return
             
@@ -128,13 +133,11 @@ class VentanaReproductorVideo(QMainWindow):
 
     def _pintar(self, pix: QPixmap):
         if self.view.width() > 0 and self.view.height() > 0:
-            self.view.setPixmap(pix.scaled(
-                self.view.width(), self.view.height(),
-                Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.view.setPixmap(pix.scaled(self.view.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
-    def closeEvent(self, ev):
-        try:
-            if self.hilo: self.hilo.stop()
-            if self.cap: self.cap.release()
-        finally:
-            ev.accept()
+    def closeEvent(self, event):
+        if self.hilo:
+            self.hilo.stop()
+        if self.cap:
+            self.cap.release()
+        super().closeEvent(event)
