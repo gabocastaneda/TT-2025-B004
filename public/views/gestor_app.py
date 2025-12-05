@@ -586,6 +586,14 @@ class GestorAplicacion(QObject):
                 else:
                     self._handle_input_error() # Error
                 return
+            
+        if self.state in {ST.WAIT_TICKET, ST.WAIT_PRODUCT, ST.SURVEY}:
+            print(f"[DEBUG] Entrada inválida para el estado {self.state}: '{s}'")
+            if isinstance(self.ventana_actual, VentanaInteraccion):
+                self.ventana_actual.mostrar_error_captura()
+                
+            self._handle_input_error()
+            return
 
         # Lógica de estados de texto
         if self.state == ST.MAIN:
