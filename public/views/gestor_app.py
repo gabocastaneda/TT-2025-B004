@@ -11,10 +11,6 @@ from public.views.formatos.bienvenida import VentanaBienvenida
 from public.views.formatos.respuesta_unica import VentanaReproductorVideo
 from public.views.formatos.interaccion import VentanaInteraccion
 
-# importaciones para los numeros
-import re, time
-from datetime import datetime
-
 TG_TOKEN = "8567289049:AAF1lFThXzqpu2ptbHUcAkS3-b6CKEUmaEI"
 TG_CHAT_ID = "1794777471"
 
@@ -240,6 +236,10 @@ class GestorAplicacion(QObject):
         self.dir_videos.mkdir(parents=True, exist_ok=True)
 
         self.mapa = build_mapa_videos_interaccion(self.dir_videos)
+        
+        self.notificacion_counter = 0
+        
+        self.modo_gestos_activo = False
 
         self.state = ST.MAIN
         
@@ -329,17 +329,8 @@ class GestorAplicacion(QObject):
     def _on_gesto_detectado(self, gesto: str):
         if not self.modo_gestos_activo or self.playing:
             return
-        
-        # agregamos la logica de captura de digitos concatenados
-        if self._es_estado_solo_numeros():
-            if self._procesar_digito_concatenado(gesto):
-                return # Ya fue procesado como un digito concatenado
-            else:
-                if isinstance(self.ventana_actual, VentanaInteraccion):
-                    self.ventana_actual.mostrar_error_digito_invalido()
-                return
-            
-        self._on_txt_ui_guarded(gesto)
+        comando = gesto.lower()    
+        self._on_txt_ui_guarded(comando)
 
     def _mostrar_error_entrada(self):
         if isinstance(self.ventana_actual, VentanaInteraccion):
@@ -441,6 +432,18 @@ class GestorAplicacion(QObject):
         self.mostrar_bienvenida()
 
     def _hook_interaccion(self, win: VentanaInteraccion):
+        
+        # Limpiar conexiones previas
+        try:
+            win.video_terminado.disconnect()
+        except:
+            pass
+        
+        try:
+            win.gesto_detectado.disconnect()
+        except:
+            pass
+        
         win.video_terminado.connect(self._on_video_finished)
         if self.playing:
             # si esta reproduciendo, bloquear terminal
@@ -534,13 +537,6 @@ class GestorAplicacion(QObject):
 
     def _set_state(self, st: str):
         self.state = st
-        
-        # iniciar o resetear concatenacion segun el estado
-        if self._es_estado_solo_numeros():
-            self._iniciar_concatenacion_digitos()
-        else:
-            self._resetear_concatenacion()
-        
         self._print_prompt()
 
     def _print_prompt(self):
@@ -859,14 +855,16 @@ class GestorAplicacion(QObject):
         src = self.mapa.get("resp1")
         win = VentanaInteraccion(src)
         self._safe_disconnect_all(win)
+        self._hook_interaccion(win)
         self._swap(win)
         self._bloquear(True)
         print("\n" + RESP_TEXTO["resp1"] + "\n")
 
         def _after_first():
-            self._bloquear(False)
             self._safe_disconnect_all(win)
             self._hook_interaccion(win)
+            self._activar_modo_gestos(True)
+            self._bloquear(False)
             self._set_state(ST.MAIN)
         win.video_terminado.connect(_after_first)
 
