@@ -1,11 +1,11 @@
 {
-  "111": {
-    "NumTicket": 111,
+  "123456789012": {
+    "NumTicket": 123456789012,
     "FechaCompra": "225-10-20 13:45:10",
     "idCliente": 1
   },
-  "112": {
-    "NumTicket": 112,
+  "195830273913": {
+    "NumTicket": 195830273913,
     "FechaCompra": "225-10-20 15:10:25",
     "idCliente": 2
   }

@@ -1,35 +1,35 @@
 {
   "1": {
     "idTicketDetalle": 1,
-    "NumTicket": 111,
+    "NumTicket": 123456789012,
     "idProducto": 11,
     "Cantidad": 1,
     "PrecioVenta": 8450.0
   },
   "2": {
     "idTicketDetalle": 2,
-    "NumTicket": 111,
+    "NumTicket": 123456789012,
     "idProducto": 21,
     "Cantidad": 2,
     "PrecioVenta": 637.5
   },
   "3": {
     "idTicketDetalle": 3,
-    "NumTicket": 112,
+    "NumTicket": 195830273913,
     "idProducto": 12,
     "Cantidad": 1,
     "PrecioVenta": 22000.0
   },
   "4": {
     "idTicketDetalle": 4,
-    "NumTicket": 112,
+    "NumTicket": 195830273913,
     "idProducto": 21,
     "Cantidad": 1,
     "PrecioVenta": 637.5
   },
   "5": {
     "idTicketDetalle": 5,
-    "NumTicket": 112,
+    "NumTicket": 195830273913,
     "idProducto": 22,
     "Cantidad": 1,
     "PrecioVenta": 120.0
