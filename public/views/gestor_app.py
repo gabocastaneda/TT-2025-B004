@@ -44,15 +44,6 @@ class LocalRepo:
             "clientes": self.base_data / "clientes.json"
         }
         
-        # Mocks de datos inyectados
-        self._mock_data = {
-            "tickets": json.loads('{"1001": {"NumTicket": 1001, "FechaCompra": "225-10-20 13:45:10", "idCliente": 1}, "112": {"NumTicket": 112, "FechaCompra": "225-10-20 15:10:25", "idCliente": 2}}'),
-            "detalles": json.loads('{"1": {"idTicketDetalle": 1, "NumTicket": 1001, "idProducto": 101, "Cantidad": 1, "PrecioVenta": 8450.0}, "2": {"idTicketDetalle": 2, "NumTicket": 1001, "idProducto": 21, "Cantidad": 2, "PrecioVenta": 637.5}, "3": {"idTicketDetalle": 3, "NumTicket": 112, "idProducto": 12, "Cantidad": 1, "PrecioVenta": 22000.0}, "4": {"idTicketDetalle": 4, "NumTicket": 112, "idProducto": 21, "Cantidad": 1, "PrecioVenta": 637.5}, "5": {"idTicketDetalle": 5, "NumTicket": 112, "idProducto": 22, "Cantidad": 1, "PrecioVenta": 120.0}}'),
-            "productos": json.loads('{"101": {"idProducto": 101, "NombreProducto": "Televisión LED 50\\"", "PrecioProducto": 8500.0, "Descripcion": "Smart TV 4K UHD", "Disponibilidad": true, "CodigoArea": 10, "idDescuento": 2, "ImagenURL": "productos/tv_led_50.png"}, "12": {"idProducto": 12, "NombreProducto": "Laptop Gamer", "PrecioProducto": 22000.0, "Descripcion": "Laptop con tarjeta gráfica dedicada", "Disponibilidad": true, "CodigoArea": 10, "idDescuento": null, "ImagenURL": "productos/laptop_gamer.png"}, "103": {"idProducto": 103, "NombreProducto": "Audífonos Bluetooth", "PrecioProducto": 1800.0, "Descripcion": "Cancelación de ruido activa, 20hrs de batería", "Disponibilidad": true, "CodigoArea": 10, "idDescuento": 1, "ImagenURL": "productos/audifonos_bt.png"}, "21": {"idProducto": 21, "NombreProducto": "Camisa de Lino", "PrecioProducto": 750.0, "Descripcion": "Camisa casual manga larga", "Disponibilidad": true, "CodigoArea": 20, "idDescuento": 1, "ImagenURL": "productos/camisa_lino.png"}, "22": {"idProducto": 22, "NombreProducto": "Zapatos de Piel", "PrecioProducto": 1200.0, "Descripcion": "Zapatos formales color negro", "Disponibilidad": true, "CodigoArea": 20, "idDescuento": 1, "ImagenURL": "productos/zapatos_piel.jpg"}}'),
-            "descuentos": json.loads('{"1": {"idDescuento": 1, "Valor": 15.0, "Tipo": "Porcentaje", "FechaInicio": "225-10-01", "FechaFin": "225-10-31", "Estado": "Activo"}, "2": {"idDescuento": 2, "Valor": 50.0, "Tipo": "MontoFijo", "FechaInicio": "225-10-15", "FechaFin": "225-10-25", "Estado": "Activo"}}'),
-            "clientes": json.loads('{"1": {"idCliente": 1, "RFCCliente": "GOPJ850101AA1", "NombreCliente": "Juan Pérez"}, "2": {"idCliente": 2, "RFCCliente": "GAML88022BB2", "NombreCliente": "Ana García"}}')
-        }
-
     def _load_json(self, key: str):
         path = self.paths[key]
         if path.exists():
@@ -60,8 +51,7 @@ class LocalRepo:
                 with open(path, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except Exception:
-                return self._mock_data.get(key, {})
-        return self._mock_data.get(key, {})
+                return 
 
     def fetch_ticket_bundle(self, ticket_num: int) -> Optional[dict]:
         tickets = self._load_json("tickets")
