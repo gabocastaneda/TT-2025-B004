@@ -174,21 +174,26 @@ def render_ticket_html(bundle: dict) -> str:
 # CONSTANTES Y FLUJO DE ESTADOS
 # ==============================================================================
 RESP_INTERACCION = {"resp1","resp3","resp5","resp7","resp9","resp10","resp11","resp12"}
-RESP_UNICA       = {"resp2","resp4","resp6","resp8"}
+# Se agregan resp14, resp15 y resp16 como respuestas únicas (lineales)
+RESP_UNICA       = {"resp2","resp4","resp6","resp8","resp13","resp14","resp15","resp16"}
 
 RESP_TEXTO = {
-    "resp1":  "Resp1- Captura alguna de las siguientes opciones:\n\tFacturacion / Aclaracion / Devolucion / Dudas / Ninguna",
+    "resp1":  "Resp1- Contamos con cinco ramas de atención, captura la palabra que corresponda a tu solicitud:\n\tFacturacion / Aclaracion / Devolucion / Dudas / Ninguna",
     "resp2":  "Resp2- Lamentamos no poder ayudarte, continuaremos trabajando para proporcionarte un mejor servicio",
-    "resp3":  "Resp3- ¿Hay algo más en lo que te pueda ayudar? (si/no)",
+    "resp3":  "Resp3- ¿Hay algo más en lo que te pueda ayudar? Por favor captura Si o No",
     "resp4":  "Resp4- Gracias por utilizar nuestro sistema",
-    "resp5":  "Resp5- Por favor, ayúdanos contestando una encuesta de satisfacción (1..5)",
-    "resp6":  "Resp6- Lo lamentamos pero para poder darle el apoyo debe contar con su número de ticket.",
-    "resp7":  "Resp7- ¿Hay algún otro producto? (si/no)",
-    "resp8":  "Resp8- Un asociado se acercará para apoyarte con el proceso. Comparte tu ticket y producto(s) capturados.",
-    "resp9":  "Resp9- ¿Cuenta con su ticket? (si/no)",
-    "resp10": "Resp10- Capture su número de ticket",
-    "resp11": "Resp11- Opciones para devolución (producto / ninguno)",
-    "resp12": "Resp12- Opciones de devolución (dañado / defecto / equivocación)",
+    "resp5":  "Resp5- Por favor, ayúdanos contestando una encuesta de satisfacción",
+    "resp6":  "Resp6- Lo lamentamos pero para poder darle el apoyo debe contar con su ticket para poder escanearlo",
+    "resp7":  "Resp7- ¿Hay algún otro producto que desee seleccionar? Por favor capture Si o No",
+    "resp8":  "Resp8- Hemos notificado al asociado correspondiente. Se acercará para apoyarte con el proceso. Comparte tu ticket y producto(s) capturado(s).",
+    "resp9":  "Resp9- ¿Cuenta con su ticket? Por favor capture Si o No",
+    "resp10": "Resp10- Con ayuda del escaner, escane el código de barras que se encuentra en su ticket",
+    "resp11": "Resp11- Captura la palabra (producto) para confirmar que desea hacer una devolución, de lo contrario capture la palabra (ninguno)",
+    "resp12": "Resp12- Especifique el motivo de devolución del producto. Capture la opción que corresponda al motivo de su devolución (dañado / defecto / equivocación) en caso de que no aplique ninguna opción, capture (ninguno)",
+    "resp13": "Resp13- ¡Hola! Somos un sistema de apoyo a la atención al cliente de personas sordas-señantes",
+    "resp14": "Resp14- Para poder interectarua con el sistema deberás capturar únicamente las palabras indicadas en los siguientes videos.",
+    "resp15": "Resp15- Sin tocar la pantalla mueva su dedo índice para que el cursor se coloque y mantenga durante 3 segundos sobre la calificación que desee otorgar al Sistema. ",
+    "resp16": "Resp16- Sin tocar la pantalla, mueva su dedo índice para que el cursor se coloque sobre el producto que le gustaría cambiar y mantenga durante 3 segundos "
 }
 
 def _norm(s: str) -> str:
@@ -457,6 +462,7 @@ class GestorAplicacion(QObject):
                 self.ventana_actual.set_modo_reproduccion(True)
                 self.ventana_actual.cambiar_video_unidad(src, nombre_resp=resp_name)
         else:
+            # Manejo de respuestas únicas (videos lineales como resp14, 15, 16)
             ruta = self._ensure_local_resp(resp_name)
             win = VentanaReproductorVideo(ruta if ruta else None)
             self._safe_disconnect_all(win)
@@ -518,10 +524,7 @@ class GestorAplicacion(QObject):
         else:
             self.ventana_actual = nueva
         
-        # --- LÓGICA CORREGIDA DE ACTIVACIÓN DE GESTOS ---
         if isinstance(nueva, VentanaInteraccion):
-            # Si estamos reproduciendo un video (playing=True),
-            # NO activamos gestos todavía. Se activarán en _on_video_finished.
             if self.playing:
                 self._activar_modo_gestos(False)
             else:
@@ -634,8 +637,8 @@ class GestorAplicacion(QObject):
         elif self.state == ST.MORE_PRODUCT:
             if _yes(v):
                 self._reset_error_count()
-                # Volvemos a pedir producto
-                self._set_state(ST.WAIT_PRODUCT)
+                # MODIFICACIÓN: En lugar de solo cambiar estado, reactivamos la ventana de cámara/ticket
+                self._lanzar_ventana_ticket()
             elif _no(v):
                 self._reset_error_count()
                 self._enqueue_and_play(["resp4","resp8","resp3"], ST.RESP3_MAIN)
@@ -648,14 +651,16 @@ class GestorAplicacion(QObject):
                 self._enqueue_and_play(["resp1"], ST.MAIN)
             elif _no(v):
                 self._reset_error_count()
-                self._enqueue_and_play(["resp5"], ST.SURVEY)
+                # MODIFICACIÓN: Agregar Resp15 antes de la encuesta
+                self._enqueue_and_play(["resp5", "resp15"], ST.SURVEY)
             else:
                 self._handle_input_error()
         
         elif self.state == ST.RESP3_NO_TICKET:
              if _no(v):
                 self._reset_error_count()
-                self._enqueue_and_play(["resp4","resp5"], ST.SURVEY)
+                # MODIFICACIÓN: Agregar Resp15 antes de la encuesta
+                self._enqueue_and_play(["resp4","resp5", "resp15"], ST.SURVEY)
              else:
                 self._handle_input_error()
         else:
@@ -677,24 +682,36 @@ class GestorAplicacion(QObject):
         self.context["ticket_num"] = num
         self.context["ticket_bundle"] = bundle
 
-        # --- TRANSICIÓN SEGURA: CERRAR ANTERIOR ---
-        if isinstance(self.ventana_actual, VentanaInteraccion):
-            print("[SISTEMA] Cerrando VentanaInteraccion y liberando recursos...")
-            try:
-                if hasattr(self.ventana_actual, 'timer_cam'):
-                    self.ventana_actual.timer_cam.stop()
-                if hasattr(self.ventana_actual, 'cap_cam') and self.ventana_actual.cap_cam:
-                    self.ventana_actual.cap_cam.release()
-                if hasattr(self.ventana_actual, 'inferencia') and self.ventana_actual.inferencia:
-                    self.ventana_actual.inferencia = None
-            except Exception as e:
-                print(f"[WARN] Error liberando recursos manual: {e}")
+        # MODIFICACIÓN: Reproducir Resp16 antes de mostrar ticket/camara
+        # Se reproduce el video unico, y al terminar se lanza la ventana de ticket
+        
+        print("[FLUJO] Reproduciendo Resp16 antes de mostrar cámara...")
+        ruta = self._ensure_local_resp("resp16")
+        win = VentanaReproductorVideo(ruta if ruta else None)
+        self._safe_disconnect_all(win)
+        
+        # Conectamos la finalización del video a la apertura de la cámara
+        win.transicion_solicitada.connect(self._lanzar_ventana_ticket)
+        
+        self._swap(win)
+        self._bloquear(True)
 
+    def _lanzar_ventana_ticket(self):
+        """Método auxiliar para abrir/reabrir la ventana de ticket+cámara."""
+        print("[SISTEMA] Lanzando VentanaTicketCamara...")
+        bundle = self.context.get("ticket_bundle")
+        if not bundle:
+            print("[ERROR] Intento de abrir cámara sin bundle de ticket.")
+            self._set_state(ST.MAIN)
+            return
+
+        # Limpieza previa si venimos de otra ventana
+        if isinstance(self.ventana_actual, VentanaInteraccion):
             self._safe_disconnect_all(self.ventana_actual)
             self.ventana_actual.close()
-            self.ventana_actual = None
         
-        # --- ABRIR NUEVA VENTANA TICKET ---
+        # Si veníamos del reproductor de video (resp16), ya se cerrará por _swap implícito o create
+        
         win = VentanaTicketCamara()
         texto_ticket_html = render_ticket_html(bundle)
         lista_productos = bundle.get("productos", [])
@@ -705,8 +722,11 @@ class GestorAplicacion(QObject):
         self.ventana_actual = win
         win.show()
         win.iniciar_camara_segura()
-
+        
+        # Desbloqueamos lógica si estaba bloqueada por video
+        self._bloquear(False)
         self._set_state(ST.WAIT_PRODUCT)
+
 
     def _handle_product_number(self, prod_id: int):
         print(f"[GESTOR] Producto seleccionado recibido: {prod_id}")
@@ -811,6 +831,21 @@ class GestorAplicacion(QObject):
         self._swap(win)
 
     def _after_bienvenida(self):
+        # MODIFICACIÓN: Antes de ir al Main, reproducimos Resp14 en VentanaReproductorVideo
+        print("[FLUJO] Inicio -> Resp14 (Instrucciones de captura)...")
+        ruta = self._ensure_local_resp("resp14")
+        win = VentanaReproductorVideo(ruta if ruta else None)
+        self._safe_disconnect_all(win)
+        
+        # Al terminar resp14, iniciamos el menú principal (Resp1)
+        win.transicion_solicitada.connect(self._iniciar_menu_principal)
+        
+        self._swap(win)
+        # No bloqueamos el hilo aquí porque es video único, pero la UI está controlada
+
+    def _iniciar_menu_principal(self):
+        # Esta función contiene la lógica original que tenía _after_bienvenida
+        print("[FLUJO] Instrucciones terminadas -> Menú Principal (Resp1)...")
         src = self.mapa.get("resp1")
         win = VentanaInteraccion(src)
         self._safe_disconnect_all(win)
