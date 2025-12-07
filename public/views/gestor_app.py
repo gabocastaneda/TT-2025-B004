@@ -4,7 +4,7 @@ import sys, requests, traceback, json
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QObject
+from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QObject, QEvent
 from PyQt5.QtWidgets import QApplication
 
 # Importaciones de vistas
@@ -252,7 +252,7 @@ class HiloEntrada(QThread):
 
 class GestorAplicacion(QObject):
     FILE_ID_BIENVENIDA = FILE_IDS.get("bienvenida")
-
+    
     def __init__(self, app: QApplication):
         super().__init__()
         self.app = app
@@ -278,6 +278,10 @@ class GestorAplicacion(QObject):
             "productos": [], 
             "survey": None
         }
+        
+        self.buffer_teclado = ""
+        self.captura_habilitada = False
+        self.app.installEventFilter(self)
 
         self.queue = []
         self.next_state_after_queue = None
@@ -298,6 +302,47 @@ class GestorAplicacion(QObject):
                 self.ventana_actual.bloquear_terminal()
             else:
                 self.ventana_actual.desbloquear_terminal()
+                
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.KeyPress and self.captura_habilitada:
+            # Obtener texto digitado
+            key_text = event.text()
+            key_code = event.key()
+
+            # Acumular dígitos
+            if key_text.isdigit():
+                self.buffer_teclado += key_text
+                return True
+
+            # Enter del lector de código de barras
+            if key_code in (16777220, 16777221):  # Enter / Return
+                if self.buffer_teclado.isdigit():
+                    val = int(self.buffer_teclado)
+                    self.buffer_teclado = ""
+                    self._handle_ticket_number(val)
+                    return True
+
+                self.buffer_teclado = ""
+                return True
+
+        return False
+
+                
+    def procesar_tecla(self, event):
+        if not self.captura_habilitada:
+            return
+        
+        k = event.text()
+        
+        if k.isdigit():
+            self.buffer_teclado += k
+            return
+        
+        if event.key() == 16777220:  # Enter
+            if self.buffer_teclado:
+                val = int(self.buffer_teclado)
+                self.buffer_teclado = ""
+                self._handle_ticket_number(val)
 
     def _on_quit(self):
         try:
@@ -536,7 +581,11 @@ class GestorAplicacion(QObject):
         self.state = st
         
         if self.state == ST.WAIT_TICKET:
+            self.captura_habilitada = True
+            self.buffer_teclado = ""
             self._activar_modo_gestos(False)
+        else:
+            self.captura_habilitada = False
         
         self._print_prompt()
 

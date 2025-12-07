@@ -287,24 +287,27 @@ class VentanaInteraccion(QMainWindow):
 
     def _verificar_dependencias(self):
         print("\n" + "="*50)
-        print("🔍 VERIFICACIÓN DE DEPENDENCIAS")
+        print("VERIFICACIÓN DE DEPENDENCIAS")
         print("="*50)
         
         try:
             import mediapipe as mp
-            print("✅ MediaPipe: OK")
+            print("MediaPipe: OK")
         except Exception as e:
-            print(f"❌ MediaPipe: ERROR - {e}")
+            print(f"MediaPipe: ERROR - {e}")
             
         try:
             import google.protobuf
-            print(f"✅ Protobuf: OK (v{google.protobuf.__version__})")
+            print(f"Protobuf: OK (v{google.protobuf.__version__})")
         except Exception as e:
-            print(f"❌ Protobuf: ERROR - {e}")
+            print(f"Protobuf: ERROR - {e}")
             
         modelo_path = self.dir_backend / "modelo.pkl"
-        print(f"📁 Modelo: {'✅ EXISTE' if modelo_path.exists() else '❌ NO EXISTE'}")
+        print(f"Modelo: {'EXISTE' if modelo_path.exists() else '❌ NO EXISTE'}")
         print("="*50)
+        
+    def keyPressEvent(self, event):
+        return super().keyPressEvent(event)
 
     def bloquear_terminal(self):
         self.terminal_bloqueada = True
