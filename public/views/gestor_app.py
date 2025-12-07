@@ -500,6 +500,10 @@ class GestorAplicacion(QObject):
         self.queue = list(resp_list)
         self.next_state_after_queue = next_state
         self.processing_video_end = False
+        
+        if next_state == ST.WAIT_TICKET:
+            self.hilo.set_habilitado(True)
+        
         self._play_next_in_queue()
 
     def _play_next_in_queue(self):
@@ -552,6 +556,10 @@ class GestorAplicacion(QObject):
 
     def _set_state(self, st: str):
         self.state = st
+        
+        if self.state == ST.WAIT_TICKET:
+            self._activar_modo_gestos(False)
+        
         self._print_prompt()
 
     def _print_prompt(self):
