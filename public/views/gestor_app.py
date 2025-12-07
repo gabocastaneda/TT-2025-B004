@@ -6,10 +6,13 @@ from typing import List, Optional
 
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QObject
 from PyQt5.QtWidgets import QApplication
+
 # Importaciones de vistas
 from public.views.formatos.bienvenida import VentanaBienvenida
 from public.views.formatos.respuesta_unica import VentanaReproductorVideo
 from public.views.formatos.interaccion import VentanaInteraccion
+# IMPORTACIÓN CLAVE: Ventana de ticket con cámara integrada
+from public.views.formatos.ventana_ticket_camara import VentanaTicketCamara
 
 TG_TOKEN = "8567289049:AAF1lFThXzqpu2ptbHUcAkS3-b6CKEUmaEI"
 TG_CHAT_ID = "1794777471"
@@ -26,13 +29,13 @@ except ImportError:
 
 
 # ==============================================================================
-# LOCAL REPOSITORY (LÓGICA DE DATOS BASADA EN TUS JSONS SUBIDOS)
+# LOCAL REPOSITORY (LÓGICA DE DATOS)
 # ==============================================================================
 class LocalRepo:
     """Clase para manejar la lectura de los JSONs locales e inyectar el mock data."""
     
     def __init__(self):
-        # Paths y estructura base (asumiendo public/data/)
+        # Paths y estructura base
         self.base_data = Path(__file__).resolve().parents[1] / "data"
         self.paths = {
             "tickets": self.base_data / "tickets.json",
@@ -42,7 +45,7 @@ class LocalRepo:
             "clientes": self.base_data / "clientes.json"
         }
         
-        # Mocks de datos inyectados de los archivos subidos por el usuario
+        # Mocks de datos inyectados
         self._mock_data = {
             "tickets": json.loads('{"1001": {"NumTicket": 1001, "FechaCompra": "225-10-20 13:45:10", "idCliente": 1}, "112": {"NumTicket": 112, "FechaCompra": "225-10-20 15:10:25", "idCliente": 2}}'),
             "detalles": json.loads('{"1": {"idTicketDetalle": 1, "NumTicket": 1001, "idProducto": 101, "Cantidad": 1, "PrecioVenta": 8450.0}, "2": {"idTicketDetalle": 2, "NumTicket": 1001, "idProducto": 21, "Cantidad": 2, "PrecioVenta": 637.5}, "3": {"idTicketDetalle": 3, "NumTicket": 112, "idProducto": 12, "Cantidad": 1, "PrecioVenta": 22000.0}, "4": {"idTicketDetalle": 4, "NumTicket": 112, "idProducto": 21, "Cantidad": 1, "PrecioVenta": 637.5}, "5": {"idTicketDetalle": 5, "NumTicket": 112, "idProducto": 22, "Cantidad": 1, "PrecioVenta": 120.0}}'),
@@ -89,13 +92,13 @@ class LocalRepo:
 
                 p_data = {
                     "id": int(p_id_str),
-                    "idProducto": p_id_str, # Usamos ambos para compatibilidad de mocks
+                    "idProducto": p_id_str, 
                     "NombreProducto": prod_info.get("NombreProducto", "Desconocido"),
                     "Descripcion": prod_info.get("Descripcion", ""),
-                    "PrecioProducto": prod_info.get("PrecioProducto", 0.0), # Precio base
-                    "PrecioVenta": precio_venta, # Precio final pagado (incl. descuento si aplica)
+                    "PrecioProducto": prod_info.get("PrecioProducto", 0.0), 
+                    "PrecioVenta": precio_venta, 
                     "cantidad": cant,
-                    "imagen": prod_info.get("ImagenURL", ""), # RUTA CLAVE PARA EL UI
+                    "imagen": prod_info.get("ImagenURL", ""), 
                     "descuento": descuentos_cat.get(str(prod_info.get("idDescuento")))
                 }
                 productos_finales.append(p_data)
@@ -111,40 +114,72 @@ class LocalRepo:
             "productos": productos_finales
         }
 
-# Instancia del repositorio de datos
 repo = LocalRepo()
 
 
 # ==============================================================================
-# FUNCIONES DE RENDERIZADO PARA TEXTO
+# RENDERIZADO HTML (DISEÑO TICKET REAL)
 # ==============================================================================
-def render_ticket_text_formato_ticket(bundle: dict) -> str:
-    """Renderiza el ticket completo en formato de ticket de compra"""
-    lineas = []
-    lineas.append("=" * 16 + f" TICKET #{bundle.get('ticket_num', 'N/A')} " + "=" * 16)
-    lineas.append(f"Fecha: {bundle.get('fecha', 'N/A')}")
-    lineas.append("-" * 50)
-    lineas.append(f"{'ID':<5} | {'Producto':<25} | {'Precio':>8}")
+def render_ticket_html(bundle: dict) -> str:
+    """Genera un ticket en formato HTML estilizado como recibo real."""
+    num = bundle.get('ticket_num', 'N/A')
+    fecha = bundle.get('fecha', 'N/A')
+    total = bundle.get('total', 0.0)
+    
+    # CSS Inline optimizado para PyQt Labels
+    html = f"""
+    <html>
+    <head>
+    <style>
+        body {{ font-family: 'Consolas', monospace; color: #000000; margin: 0; padding: 0; }}
+        h1 {{ text-align: center; margin: 0 0 10px 0; font-size: 22px; color: #000; font-weight: 900; }}
+        .fecha {{ text-align: center; font-size: 13px; color: #333; margin-bottom: 15px; border-bottom: 1px dashed #000; padding-bottom: 10px; }}
+        .tabla {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
+        th {{ text-align: left; font-size: 14px; color: #000; text-transform: uppercase; border-bottom: 2px solid #000; }}
+        .th-right {{ text-align: right; }}
+        td {{ padding: 8px 0; font-size: 16px; border-bottom: 1px dashed #777; }}
+        .td-right {{ text-align: right; font-weight: bold; }}
+        .total-container {{ margin-top: 20px; padding-top: 10px; border-top: 2px solid #000; }}
+        .total {{ font-size: 26px; font-weight: bold; text-align: right; color: #000; }}
+        .footer {{ text-align: center; font-size: 11px; color: #555; margin-top: 25px; font-style: italic; }}
+    </style>
+    </head>
+    <body>
+        <h1>TICKET #{num}</h1>
+        <div class="fecha">{fecha}</div>
+        
+        <table class="tabla">
+            <tr>
+                <th width="65%">PROD</th>
+                <th width="35%" class="th-right">$$$</th>
+            </tr>
+    """
     
     for p in bundle.get("productos", []):
-        prod_id = p.get("id", "N/A")
-        nombre = p.get("NombreProducto", "Producto")[:25]
+        nombre = p.get("NombreProducto", "Producto")
+        if len(nombre) > 20: nombre = nombre[:18] + ".."
         precio = p.get("PrecioVenta", 0.0)
-        lineas.append(f"{prod_id:<5} | {nombre:<25} | ${precio:>7.2f}")
-    
-    lineas.append("-" * 50)
-    lineas.append(f"TOTAL: ${bundle.get('total', 0.0):.2f}")
-    lineas.append("=" * 50)
-    
-    return "\n".join(lineas)
-
-def render_producto_individual(producto: dict, ticket_num: int) -> str:
-    """Renderiza un producto individual en formato de texto para el overlay."""
-    return (
-        f"📦 ID: {producto.get('id', 'N/A')} | Nombre: {producto.get('NombreProducto', 'Producto')}\n"
-        f"----------------------------------------\n"
-        f"Precio: ${producto.get('PrecioVenta', 0.0):.2f}"
-    )
+        
+        html += f"""
+            <tr>
+                <td>{nombre}</td>
+                <td class="td-right">${precio:,.2f}</td>
+            </tr>
+        """
+        
+    html += f"""
+        </table>
+        
+        <div class="total-container">
+            <div class="total">TOTAL: ${total:,.2f}</div>
+        </div>
+        <div class="footer">
+            *** GRACIAS POR SU COMPRA ***
+        </div>
+    </body>
+    </html>
+    """
+    return html
 
 
 # ==============================================================================
@@ -238,12 +273,8 @@ class GestorAplicacion(QObject):
         self.mapa = build_mapa_videos_interaccion(self.dir_videos)
         
         self.notificacion_counter = 0
-        
         self.modo_gestos_activo = False
-
         self.state = ST.MAIN
-        
-        # Contador de errores consecutivos para usabilidad
         self.consecutive_errors = 0
         
         self.context = {
@@ -251,7 +282,7 @@ class GestorAplicacion(QObject):
             "razon": None,
             "ticket_num": None,
             "ticket_bundle": None,
-            "productos": [], # IDs de productos seleccionados
+            "productos": [], 
             "survey": None
         }
 
@@ -269,7 +300,6 @@ class GestorAplicacion(QObject):
         self.playing = bool(on)
         self.hilo.set_habilitado(not on)
         
-        # agregando logica para el bloqueo de la deteccion de gestos
         if isinstance(self.ventana_actual, VentanaInteraccion):
             if on:
                 self.ventana_actual.bloquear_terminal()
@@ -283,18 +313,45 @@ class GestorAplicacion(QObject):
             pass
 
     def _safe_disconnect_all(self, win):
+        """Desconecta señales de manera segura, ignorando errores si no estaban conectadas."""
         try:
             if isinstance(win, VentanaInteraccion):
-                win.video_terminado.disconnect()
-                win.gesto_detectado.disconnect()
-                # Desconectar señales nuevas si existen
+                try: win.video_terminado.disconnect()
+                except: pass
+                try: win.gesto_detectado.disconnect()
+                except: pass
                 try: win.alerta_ayuda_terminada.disconnect()
                 except: pass
+            
             elif isinstance(win, VentanaReproductorVideo):
-                win.transicion_solicitada.disconnect()
+                # PROTECCIÓN EXTRA AQUÍ
+                try: win.transicion_solicitada.disconnect()
+                except Exception: pass # Ignorar cualquier error de desconexión
+            
             elif isinstance(win, VentanaBienvenida):
-                win.video_terminado.disconnect()
-        except TypeError:
+                try: win.video_terminado.disconnect()
+                except: pass
+        except Exception:
+            pass
+        """Desconecta señales de manera segura, ignorando errores si no estaban conectadas."""
+        try:
+            if isinstance(win, VentanaInteraccion):
+                try: win.video_terminado.disconnect()
+                except: pass
+                try: win.gesto_detectado.disconnect()
+                except: pass
+                try: win.alerta_ayuda_terminada.disconnect()
+                except: pass
+            
+            elif isinstance(win, VentanaReproductorVideo):
+                # PROTECCIÓN EXTRA AQUÍ
+                try: win.transicion_solicitada.disconnect()
+                except Exception: pass # Ignorar cualquier error de desconexión
+            
+            elif isinstance(win, VentanaBienvenida):
+                try: win.video_terminado.disconnect()
+                except: pass
+        except Exception:
             pass
 
     def _ensure_local_resp(self, resp_name: str) -> Optional[str]:
@@ -324,23 +381,14 @@ class GestorAplicacion(QObject):
                     self.ventana_actual.gesto_detectado.disconnect()
                 except:
                     pass
-                self.ventana_actual.gesto_detectado.connect(self._on_gesto_detectado)
-
-    def _on_gesto_detectado(self, gesto: str):
-        if not self.modo_gestos_activo or self.playing:
-            return
-        comando = gesto.lower()    
-        self._on_txt_ui_guarded(comando)
+                # Conexión directa a _on_txt_ui_guarded sin filtros de contexto
+                self.ventana_actual.gesto_detectado.connect(lambda s: self._on_txt_ui_guarded(s))
 
     def _mostrar_error_entrada(self):
         if isinstance(self.ventana_actual, VentanaInteraccion):
             self.ventana_actual.mostrar_error_captura()
 
     def _handle_input_error(self):
-        """
-        Maneja el error de entrada. Si son 3 errores consecutivos,
-        lanza la alerta de usabilidad y reinicia.
-        """
         self.consecutive_errors += 1
         print(f"[DEBUG] Error input #{self.consecutive_errors}")
 
@@ -351,11 +399,9 @@ class GestorAplicacion(QObject):
             self._print_prompt()
 
     def _reset_error_count(self):
-        """Resetea el contador de errores al tener una entrada exitosa"""
         self.consecutive_errors = 0
         
     def _get_descripcion_estado_actual(self) -> str:
-        """Retorna una descripción legible del estado (pregunta) donde se encuentra el usuario."""
         descripciones = {
             ST.MAIN: "Menú Principal (Facturación/Devolución/Dudas)",
             ST.DEV_MENU: "Selección de tipo Devolución (Producto vs Ninguno)",
@@ -372,21 +418,9 @@ class GestorAplicacion(QObject):
         return descripciones.get(self.state, f"Estado desconocido ({self.state})")
 
     def _trigger_usability_alert(self):
-        """
-        Ejecuta la lógica de falla crítica de usabilidad:
-        1. Envía reporte a Telegram con resumen, seguimiento e ID de pregunta fallida.
-        2. Muestra mensaje especial en pantalla (bloqueante).
-        3. Reinicia la app.
-        """
         print("\n!!! ALERTA DE USABILIDAD - 3 ERRORES CONSECUTIVOS !!!")
-        
-        # 1. Incrementar contador de seguimiento
         self.notificacion_counter += 1
-        
-        # Obtener descripción del paso donde se quedó varado
         paso_detenido = self._get_descripcion_estado_actual()
-        
-        # 2. Generar resumen y enviar a Telegram
         resumen_texto = self._generar_texto_resumen_string()
         
         msg_telegram = (
@@ -399,26 +433,17 @@ class GestorAplicacion(QObject):
         )
         self._enviar_telegram(msg_telegram)
         
-        # 3. Mostrar alerta en pantalla y esperar reinicio
         if isinstance(self.ventana_actual, VentanaInteraccion):
-            # Desconectamos señales normales para evitar interferencias
             try: self.ventana_actual.gesto_detectado.disconnect()
             except: pass
-            
-            # Conectamos la señal de terminación de alerta al reinicio
             try: self.ventana_actual.alerta_ayuda_terminada.disconnect()
             except: pass
-            
             self.ventana_actual.alerta_ayuda_terminada.connect(self._reiniciar_app_completo)
-            
-            # Muestra el mensaje por 6 segundos (controlado por la vista)
             self.ventana_actual.mostrar_alerta_ayuda_asociado()
         else:
-            # Fallback si no estamos en ventana de interacción
             QTimer.singleShot(6000, self._reiniciar_app_completo)
 
     def _reiniciar_app_completo(self):
-        """Limpia todo el contexto y vuelve a la bienvenida"""
         print("[SISTEMA] Reiniciando aplicación por alerta de usabilidad...")
         self.consecutive_errors = 0
         self.context = {
@@ -432,24 +457,14 @@ class GestorAplicacion(QObject):
         self.mostrar_bienvenida()
 
     def _hook_interaccion(self, win: VentanaInteraccion):
-        
-        # Limpiar conexiones previas
-        try:
-            win.video_terminado.disconnect()
-        except:
-            pass
-        
-        try:
-            win.gesto_detectado.disconnect()
-        except:
-            pass
-        
+        try: win.video_terminado.disconnect()
+        except: pass
+        try: win.gesto_detectado.disconnect()
+        except: pass
         win.video_terminado.connect(self._on_video_finished)
         if self.playing:
-            # si esta reproduciendo, bloquear terminal
             win.bloquear_terminal()
         else:
-            # Si no esta reproduciendo, desbloquear terminal
             win.desbloquear_terminal()
 
     def _hook_unica(self, win: VentanaReproductorVideo):
@@ -485,10 +500,6 @@ class GestorAplicacion(QObject):
         self.queue = list(resp_list)
         self.next_state_after_queue = next_state
         self.processing_video_end = False
-        
-        if next_state == ST.WAIT_TICKET:
-            self.hilo.set_habilitado(True)
-        
         self._play_next_in_queue()
 
     def _play_next_in_queue(self):
@@ -541,10 +552,6 @@ class GestorAplicacion(QObject):
 
     def _set_state(self, st: str):
         self.state = st
-        
-        if st == ST.WAIT_TICKET:
-            self._activar_modo_gestos(False)
-        
         self._print_prompt()
 
     def _print_prompt(self):
@@ -577,20 +584,6 @@ class GestorAplicacion(QObject):
             return
 
         v = _norm(s)
-        
-        if "\n" in s or "\r" in s:
-            v = v.strip().replace("\n"," ").replace("\r"," ")
-            
-        if self.state == ST.WAIT_TICKET:
-            self._activar_modo_gestos(False)
-            numeros = ''.join(filter(str.isdigit, s))
-            if numeros:
-                val = int(numeros)
-                self._handle_ticket_number(val)
-                return
-            else:
-                self._handle_input_error() # Error
-                return
 
         if v.isdigit():
             val = int(v)
@@ -610,7 +603,6 @@ class GestorAplicacion(QObject):
                 return
             
         if self.state in {ST.WAIT_TICKET, ST.WAIT_PRODUCT, ST.SURVEY}:
-            print(f"[DEBUG] Entrada inválida para el estado {self.state}: '{s}'")
             if isinstance(self.ventana_actual, VentanaInteraccion):
                 self.ventana_actual.mostrar_error_captura()
                 
@@ -659,11 +651,8 @@ class GestorAplicacion(QObject):
         elif self.state == ST.MORE_PRODUCT:
             if _yes(v):
                 self._reset_error_count()
-                bundle = self.context.get("ticket_bundle")
-                if bundle and isinstance(self.ventana_actual, VentanaInteraccion):
-                    self._mostrar_secuencia_ticket_productos(bundle, ST.WAIT_PRODUCT)
-                else:
-                    self._set_state(ST.WAIT_PRODUCT)
+                # Volvemos a pedir producto
+                self._set_state(ST.WAIT_PRODUCT)
             elif _no(v):
                 self._reset_error_count()
                 self._enqueue_and_play(["resp4","resp8","resp3"], ST.RESP3_MAIN)
@@ -689,70 +678,9 @@ class GestorAplicacion(QObject):
         else:
             self._set_state(ST.MAIN)
 
-    def _mostrar_secuencia_ticket_productos(self, bundle: dict, next_state: str):
-        """
-        Muestra la secuencia completa: 1. Ticket (5s), 2. Cada producto (3s), 3. Ticket final (5s)
-        """
-        if not isinstance(self.ventana_actual, VentanaInteraccion) or not bundle:
-            self._set_state(next_state)
-            return
-        
-        self._bloquear(True)
-        # --- ACTIVAR MODO REPRODUCCION: Oculta banner verde, muestra rojo ---
-        self.ventana_actual.set_modo_reproduccion(True)
-        # IMPORTANTE: bloquear terminal durante la secuencia
-        self.ventana_actual.bloquear_terminal()
-        
-        productos = bundle.get("productos", [])
-        indice_actual = [0]
-        
-        def ejecutar_paso():
-            idx = indice_actual[0]
-            
-            # Definir la secuencia de pasos con los tiempos:
-            pasos = [
-                {"type": "ticket", "tiempo": 10000, "data": None},
-            ]
-            for p in productos:
-                pasos.append({"type": "producto", "tiempo": 6000, "data": p}) 
-            pasos.append({"type": "ticket", "tiempo": 10000, "data": None})
-
-            if idx >= len(pasos):
-                self._bloquear(False)
-                # --- DESACTIVAR MODO REPRODUCCION: Muestra banner verde para captura ---
-                self.ventana_actual.set_modo_reproduccion(False)
-                
-                # IMPORTANTE: desbloquear terminal al finalizar la secuencia
-                self.ventana_actual.desbloquear_terminal()
-                
-                self._set_state(next_state)
-                return
-            
-            step = pasos[idx]
-            
-            if step["type"] == "ticket":
-                texto = render_ticket_text_formato_ticket(bundle)
-                
-                self.ventana_actual.mostrar_overlay_texto(
-                    texto=texto, 
-                    ms=step["tiempo"], 
-                    producto_data=None, # Para ticket completo, no pasamos data
-                    on_done=lambda: (indice_actual.__setitem__(0, idx + 1), ejecutar_paso())
-                )
-            
-            elif step["type"] == "producto":
-                producto = step["data"]
-                texto = render_producto_individual(producto, bundle.get('ticket_num', 'N/A'))
-                
-                self.ventana_actual.mostrar_overlay_texto(
-                    texto=texto, 
-                    ms=step["tiempo"], 
-                    producto_data=producto, # <-- FIX CLAVE: PASAR DATA PARA LA IMAGEN
-                    on_done=lambda: (indice_actual.__setitem__(0, idx + 1), ejecutar_paso())
-                )
-        
-        ejecutar_paso()
-
+    # ==============================================================================
+    # INTEGRACIÓN TICKET CAMARA (COMPATIBLE CON VENTANA ACTUAL)
+    # ==============================================================================
     def _handle_ticket_number(self, num: int):
         print(f"[DATA] Buscando ticket {num} en archivos locales...")
         bundle = repo.fetch_ticket_bundle(num)
@@ -765,24 +693,83 @@ class GestorAplicacion(QObject):
         self._reset_error_count()
         self.context["ticket_num"] = num
         self.context["ticket_bundle"] = bundle
-        
-        # Quitamos la detección de gestos
-        self._activar_modo_gestos(False)
 
-        if not isinstance(self.ventana_actual, VentanaInteraccion):
-            src = self.mapa.get("resp10")
-            win = VentanaInteraccion(src)
-            self._safe_disconnect_all(win)
-            self._hook_interaccion(win)
-            self._swap(win)
+        # --- TRANSICIÓN SEGURA: CERRAR ANTERIOR ---
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            print("[SISTEMA] Cerrando VentanaInteraccion y liberando recursos...")
             try:
-                win.set_modo_reproduccion(False)
-            except:
-                pass
+                if hasattr(self.ventana_actual, 'timer_cam'):
+                    self.ventana_actual.timer_cam.stop()
+                if hasattr(self.ventana_actual, 'cap_cam') and self.ventana_actual.cap_cam:
+                    self.ventana_actual.cap_cam.release()
+                if hasattr(self.ventana_actual, 'inferencia') and self.ventana_actual.inferencia:
+                    self.ventana_actual.inferencia = None
+            except Exception as e:
+                print(f"[WARN] Error liberando recursos manual: {e}")
 
-        self._mostrar_secuencia_ticket_productos(bundle, ST.WAIT_PRODUCT)
+            self._safe_disconnect_all(self.ventana_actual)
+            self.ventana_actual.close()
+            self.ventana_actual = None
+        
+        # --- ABRIR NUEVA VENTANA TICKET ---
+        win = VentanaTicketCamara()
+        
+        # Preparar datos HTML
+        texto_ticket_html = render_ticket_html(bundle)
+        lista_productos = bundle.get("productos", [])
+        
+        # CONFIGURACIÓN CORRECTA: Usando 'configurar_datos'
+        win.configurar_datos(texto_ticket_html, lista_productos)
+        
+        # Conectar señal de selección por gestos/touchless
+        win.producto_seleccionado.connect(self._handle_product_number)
+        
+        self.ventana_actual = win
+        win.show()
+        
+        # Iniciar cámara de ticket
+        win.iniciar_camara_segura()
+
+        self._set_state(ST.WAIT_PRODUCT)
 
     def _handle_product_number(self, prod_id: int):
+        print(f"[GESTOR] Producto seleccionado recibido: {prod_id}")
+        
+        # --- CORRECCIÓN ---
+        # No cerramos manualmente la ventana aquí (self.ventana_actual.close()).
+        # Permitimos que la ventana siga viva unos milisegundos más hasta que
+        # _enqueue_and_play -> _play_resp -> _swap se encargue de reemplazarla.
+        # Esto evita cortes en el flujo.
+
+        bundle = self.context.get("ticket_bundle")
+        if not bundle:
+            print("[ERROR] No hay bundle de ticket en contexto.")
+            self._handle_input_error()
+            return
+        
+        prods_ticket = bundle.get("productos", [])
+        found = next((p for p in prods_ticket if p.get("id") == prod_id), None)
+        
+        if not found:
+            print(f"[ERROR] ID {prod_id} no encontrado en el ticket actual.")
+            self._handle_input_error()
+            return
+        
+        self._reset_error_count()
+        self.context["productos"].append(prod_id)
+        
+        print("[GESTOR] Transición a siguiente paso (MORE_PRODUCT)...")
+        # Llamada directa sin QTimer para asegurar ejecución inmediata, 
+        # o con un tiempo muy corto.
+        self._enqueue_and_play(["resp7"], ST.MORE_PRODUCT)
+        print(f"[GESTOR] Producto seleccionado recibido: {prod_id}")
+        
+        # 1. Asegurarnos de que la ventana anterior liberó recursos
+        if isinstance(self.ventana_actual, VentanaTicketCamara):
+            self.ventana_actual.liberar_recursos()
+            self.ventana_actual.close()
+            self.ventana_actual = None
+
         bundle = self.context.get("ticket_bundle")
         if not bundle:
             self._handle_input_error()
@@ -792,29 +779,25 @@ class GestorAplicacion(QObject):
         found = next((p for p in prods_ticket if p.get("id") == prod_id), None)
         
         if not found:
-            ids_validos = [p.get("id") for p in prods_ticket]
             self._handle_input_error()
             return
         
         self._reset_error_count()
         self.context["productos"].append(prod_id)
-        self._enqueue_and_play(["resp7"], ST.MORE_PRODUCT)
+        
+        # Pequeño delay para transición suave a videos
+        QTimer.singleShot(200, lambda: self._enqueue_and_play(["resp7"], ST.MORE_PRODUCT))
 
     def _generar_texto_resumen_string(self) -> str:
-        """
-        Genera el string del resumen para ser usado en reporte final y alertas.
-        """
         ctx = self.context
         bundle = ctx.get("ticket_bundle")
         ids_seleccionados = ctx.get("productos", [])
 
         lineas = []
-        # 1. Datos Generales
         lineas.append(f" 📌 OPERACIÓN:      {str(ctx.get('branch', 'General')).upper()}")
         lineas.append(f" 📌 MOTIVO/RAZÓN:   {str(ctx.get('razon', 'N/A')).upper()}")
         lineas.append(f" ⭐ CALIFICACIÓN:   {ctx.get('survey', 'N/A')}/5")
         
-        # 2. Información del Ticket
         if bundle:
             lineas.append("-" * 40)
             lineas.append(f" 🧾 TICKET #{bundle.get('ticket_num')} | {bundle.get('fecha')}")
@@ -839,28 +822,20 @@ class GestorAplicacion(QObject):
         return "\n".join(lineas)
 
     def _mostrar_resumen_y_finalizar(self):
-        # 1. Incrementar contador de notificaciones para seguimiento
         self.notificacion_counter += 1
-        
         cuerpo_resumen = self._generar_texto_resumen_string()
         
         lineas = []
         lineas.append("✅ RESUMEN FINAL DE LA INTERACCIÓN")
-        # 2. Agregar número de seguimiento
         lineas.append(f"📦 SEGUIMIENTO: #{self.notificacion_counter:04d}")
         lineas.append("═" * 60)
         lineas.append(cuerpo_resumen)
         lineas.append("═" * 60)
         
         mensaje_completo = "\n".join(lineas)
-
-        # 3. Imprimir en consola local
         print("\n" + mensaje_completo + "\n")
-
-        # 4. Enviar a Telegram
         self._enviar_telegram(mensaje_completo)
         
-        # --- Limpieza y Reinicio ---
         self.consecutive_errors = 0
         self.context = {
             "branch": None,
@@ -875,7 +850,6 @@ class GestorAplicacion(QObject):
     def mostrar_bienvenida(self):
         dest = self.dir_videos / "bienvenida.mp4"
         if not dest.is_file():
-            # Lógica de descarga simplificada
             pass
             
         win = VentanaBienvenida(str(dest) if dest.is_file() else None)
@@ -906,15 +880,12 @@ class GestorAplicacion(QObject):
         sys.exit(self.app.exec_())
     
     def _enviar_telegram(self, mensaje_texto):
-        """Envía el texto formateado al bot de Telegram configurado."""
         if not TG_TOKEN or not TG_CHAT_ID:
             print("[Telegram] No se ha configurado Token o Chat ID.")
             return
 
         url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
-        
         texto_formateado = f"```text\n{mensaje_texto}\n```"
-
         payload = {
             "chat_id": TG_CHAT_ID,
             "text": texto_formateado,
@@ -923,7 +894,6 @@ class GestorAplicacion(QObject):
         
         try:
             requests.post(url, json=payload, timeout=3)
-            # Imprimir confirmación con número de seguimiento para depuración
             print(f"[Telegram] Reporte #{self.notificacion_counter} enviado correctamente.")
         except Exception as e:
             print(f"[Telegram] Error al enviar reporte: {e}")
