@@ -307,7 +307,6 @@ class GestorAplicacion(QObject):
                 self.ventana_actual.bloquear_terminal()
             else:
                 self.ventana_actual.desbloquear_terminal()
-<<<<<<< HEAD
                 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.KeyPress and self.captura_habilitada:
@@ -333,47 +332,6 @@ class GestorAplicacion(QObject):
 
         return False
 
-    def _loop_presencia(self):
-        """
-        Loop maestro que controla:
-        - detección de presencia
-        - pérdida de presencia
-        - inicio de flujo
-        - retorno a bienvenida
-        """
-        # Detectar ausencia (más de 4 segundos sin presencia)
-        if self.state not in {ST.IDLE}:
-            if time.time() - self.ultima_presencia > 4:
-                print("[SISTEMA] Persona ausente — regresando a bienvenida…")
-                self._forzar_bienvenida()
-                return
-
-        # Detectar presencia para arrancar flujo
-        if self.state == ST.IDLE and self.presencia_detectada:
-            print("[SISTEMA] Detectada presencia — iniciando sistema…")
-            self.presencia_detectada = False
-            self._after_presencia()
-            
-    def _after_presencia(self):
-        """Empieza el flujo desde bienvenida."""
-        self._reset_error_count()
-        self.mostrar_bienvenida()
-
-
-    def _forzar_bienvenida(self):
-        self.state = ST.IDLE
-        self.presencia_detectada = False
-        self._reset_error_count()
-        
-        # Cerrar cualquier ventana actual
-        if self.ventana_actual:
-            try:
-                self.ventana_actual.close()
-            except:
-                pass
-        
-        self.mostrar_bienvenida()
-
                 
     def procesar_tecla(self, event):
         if not self.captura_habilitada:
@@ -390,8 +348,6 @@ class GestorAplicacion(QObject):
                 val = int(self.buffer_teclado)
                 self.buffer_teclado = ""
                 self._handle_ticket_number(val)
-=======
->>>>>>> parent of cbc0f20 (fix: se incorporo un evento con PyQt5 para que desde la app se registre el codigo de barras sin necesidad de tener como foco la consola de ejecucion)
 
     def _on_quit(self):
         try:
