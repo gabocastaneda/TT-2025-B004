@@ -337,16 +337,25 @@ class GestorAplicacion(QObject):
         return False
 
     def _loop_presencia(self):
-        if self.state == ST.IDLE:
-            if self.presencia_detectada:
-                self.presencia_detectada = False
-                self._after_presencia()
-                return
-            return
-        
-        if self.state != ST.IDLE:
+        """
+        Loop maestro que controla:
+        - detección de presencia
+        - pérdida de presencia
+        - inicio de flujo
+        - retorno a bienvenida
+        """
+        # Detectar ausencia (más de 4 segundos sin presencia)
+        if self.state not in {ST.IDLE}:
             if time.time() - self.ultima_presencia > 4:
+                print("[SISTEMA] Persona ausente — regresando a bienvenida…")
                 self._forzar_bienvenida()
+                return
+
+        # Detectar presencia para arrancar flujo
+        if self.state == ST.IDLE and self.presencia_detectada:
+            print("[SISTEMA] Detectada presencia — iniciando sistema…")
+            self.presencia_detectada = False
+            self._after_presencia()
             
     def _after_presencia(self):
         """Empieza el flujo desde bienvenida."""
@@ -367,7 +376,6 @@ class GestorAplicacion(QObject):
                 pass
         
         self.mostrar_bienvenida()
-        self._modo_suspension()
 
                 
     def procesar_tecla(self, event):
@@ -916,35 +924,17 @@ class GestorAplicacion(QObject):
             "survey": None
         }
         self._forzar_bienvenida()
-        
-    def _modo_suspension(self):
-        """
-        Estado de baja energía: solo cámara + detección de manos.
-        Se activa siempre en bienvenida.
-        """
-        self._activar_modo_gestos(True)
-        self.presencia_detectada = False
-        self.ultima_presencia = time.time()
 
     def mostrar_bienvenida(self):
         dest = self.dir_videos / "bienvenida.mp4"
         if not dest.is_file():
             pass
-                
+            
         win = VentanaBienvenida(str(dest) if dest.is_file() else None)
         self._safe_disconnect_all(win)
         win.video_terminado.connect(self._after_bienvenida)
         self._bloquear(True)
         self._swap(win)
-        
-        try:
-            win.iniciar_camara_segura()
-        except:
-            pass
-        
-        self._activar_modo_gestos(True)
-        self._modo_suspension()
-        
 
     def _after_bienvenida(self):
         # MODIFICACIÓN: Antes de ir al Main, reproducimos Resp14 en VentanaReproductorVideo
