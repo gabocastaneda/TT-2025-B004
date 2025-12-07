@@ -3,6 +3,7 @@
 import sys, requests, traceback, json
 from pathlib import Path
 from typing import List, Optional
+import time
 
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QObject, QEvent
 from PyQt5.QtWidgets import QApplication
@@ -206,6 +207,7 @@ def _no(s: str) -> bool:
     return _norm(s) in {"no","n"}
 
 class ST:
+    IDLE = "IDLE"
     MAIN = "MAIN"
     DEV_MENU = "DEV_MENU"
     DEV_REASON = "DEV_REASON"
@@ -265,9 +267,13 @@ class GestorAplicacion(QObject):
 
         self.mapa = build_mapa_videos_interaccion(self.dir_videos)
         
+        self.timer_presencia = QTimer()
+        self.timer_presencia.timeout.connect(self._loop_presencia)
+        self.timer_presencia.start(4000)  # Cada 4 segundos
+        
         self.notificacion_counter = 0
         self.modo_gestos_activo = False
-        self.state = ST.MAIN
+        self.state = ST.IDLE
         self.consecutive_errors = 0
         
         self.context = {
@@ -286,6 +292,9 @@ class GestorAplicacion(QObject):
         self.queue = []
         self.next_state_after_queue = None
         self.processing_video_end = False
+        
+        self.presencia_detectada = False
+        self.ultima_presencia = 0
 
         self.hilo = HiloEntrada()
         self.hilo.senal_txt.connect(lambda s: QTimer.singleShot(0, lambda: self._on_txt_ui_guarded(s)))
@@ -326,6 +335,47 @@ class GestorAplicacion(QObject):
                 return True
 
         return False
+
+    def _loop_presencia(self):
+        """
+        Loop maestro que controla:
+        - detección de presencia
+        - pérdida de presencia
+        - inicio de flujo
+        - retorno a bienvenida
+        """
+        # Detectar ausencia (más de 4 segundos sin presencia)
+        if self.state not in {ST.IDLE}:
+            if time.time() - self.ultima_presencia > 4:
+                print("[SISTEMA] Persona ausente — regresando a bienvenida…")
+                self._forzar_bienvenida()
+                return
+
+        # Detectar presencia para arrancar flujo
+        if self.state == ST.IDLE and self.presencia_detectada:
+            print("[SISTEMA] Detectada presencia — iniciando sistema…")
+            self.presencia_detectada = False
+            self._after_presencia()
+            
+    def _after_presencia(self):
+        """Empieza el flujo desde bienvenida."""
+        self._reset_error_count()
+        self.mostrar_bienvenida()
+
+
+    def _forzar_bienvenida(self):
+        self.state = ST.IDLE
+        self.presencia_detectada = False
+        self._reset_error_count()
+        
+        # Cerrar cualquier ventana actual
+        if self.ventana_actual:
+            try:
+                self.ventana_actual.close()
+            except:
+                pass
+        
+        self.mostrar_bienvenida()
 
                 
     def procesar_tecla(self, event):
@@ -607,6 +657,12 @@ class GestorAplicacion(QObject):
         print(msg)
 
     def _on_txt_ui_guarded(self, s: str):
+        
+        if self.state == ST.IDLE:
+            self.presencia_detectada = True
+            self.ultima_presencia = time.time()
+            return
+        
         try:
             self._on_txt_ui(s)
         except Exception as e:
@@ -615,6 +671,7 @@ class GestorAplicacion(QObject):
             self._print_prompt()
 
     def _on_txt_ui(self, s: str):
+        self.ultima_presencia = time.time() 
         if self.playing:
             return
 
@@ -866,7 +923,7 @@ class GestorAplicacion(QObject):
             "productos": [],
             "survey": None
         }
-        self._enqueue_and_play(["resp1"], ST.MAIN)
+        self._forzar_bienvenida()
 
     def mostrar_bienvenida(self):
         dest = self.dir_videos / "bienvenida.mp4"
@@ -891,6 +948,12 @@ class GestorAplicacion(QObject):
         
         self._swap(win)
         # No bloqueamos el hilo aquí porque es video único, pero la UI está controlada
+
+    def _detectar_presencia(self):
+        if self.state == ST.IDLE:
+            print("[SISTEMA] Detectada presencia, reiniciando aplicación...")
+            self.presencia_detectada = False
+            self._enqueue_and_play(["resp1"], ST.MAIN)
 
     def _iniciar_menu_principal(self):
         # Esta función contiene la lógica original que tenía _after_bienvenida

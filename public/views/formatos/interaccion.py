@@ -483,7 +483,7 @@ class VentanaInteraccion(QMainWindow):
         else:
             self.label_estado_gestos.hide()
 
-    def _on_gesto_detectado(self, gesto: str):
+    def _on_gesto_detectado(self, gesto: str):        
         self.gesto_detectado.emit(gesto)
 
     def _actualizar_estado_gestos(self, mensaje: str, color: str = "#3498db"):
