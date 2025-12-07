@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Optional
 import time
 
-from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QObject, QEvent
+from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QObject
 from PyQt5.QtWidgets import QApplication
 
 # Importaciones de vistas
@@ -254,7 +254,7 @@ class HiloEntrada(QThread):
 
 class GestorAplicacion(QObject):
     FILE_ID_BIENVENIDA = FILE_IDS.get("bienvenida")
-    
+
     def __init__(self, app: QApplication):
         super().__init__()
         self.app = app
@@ -284,10 +284,6 @@ class GestorAplicacion(QObject):
             "productos": [], 
             "survey": None
         }
-        
-        self.buffer_teclado = ""
-        self.captura_habilitada = False
-        self.app.installEventFilter(self)
 
         self.queue = []
         self.next_state_after_queue = None
@@ -311,6 +307,7 @@ class GestorAplicacion(QObject):
                 self.ventana_actual.bloquear_terminal()
             else:
                 self.ventana_actual.desbloquear_terminal()
+<<<<<<< HEAD
                 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.KeyPress and self.captura_habilitada:
@@ -393,6 +390,8 @@ class GestorAplicacion(QObject):
                 val = int(self.buffer_teclado)
                 self.buffer_teclado = ""
                 self._handle_ticket_number(val)
+=======
+>>>>>>> parent of cbc0f20 (fix: se incorporo un evento con PyQt5 para que desde la app se registre el codigo de barras sin necesidad de tener como foco la consola de ejecucion)
 
     def _on_quit(self):
         try:
@@ -631,11 +630,7 @@ class GestorAplicacion(QObject):
         self.state = st
         
         if self.state == ST.WAIT_TICKET:
-            self.captura_habilitada = True
-            self.buffer_teclado = ""
             self._activar_modo_gestos(False)
-        else:
-            self.captura_habilitada = False
         
         self._print_prompt()
 
