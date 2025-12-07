@@ -11,7 +11,6 @@ from PyQt5.QtWidgets import QApplication
 from public.views.formatos.bienvenida import VentanaBienvenida
 from public.views.formatos.respuesta_unica import VentanaReproductorVideo
 from public.views.formatos.interaccion import VentanaInteraccion
-# IMPORTACIÓN CLAVE: Ventana de ticket con cámara integrada
 from public.views.formatos.ventana_ticket_camara import VentanaTicketCamara
 
 TG_TOKEN = "8567289049:AAF1lFThXzqpu2ptbHUcAkS3-b6CKEUmaEI"
@@ -126,7 +125,6 @@ def render_ticket_html(bundle: dict) -> str:
     fecha = bundle.get('fecha', 'N/A')
     total = bundle.get('total', 0.0)
     
-    # CSS Inline optimizado para PyQt Labels
     html = f"""
     <html>
     <head>
@@ -324,29 +322,8 @@ class GestorAplicacion(QObject):
                 except: pass
             
             elif isinstance(win, VentanaReproductorVideo):
-                # PROTECCIÓN EXTRA AQUÍ
                 try: win.transicion_solicitada.disconnect()
-                except Exception: pass # Ignorar cualquier error de desconexión
-            
-            elif isinstance(win, VentanaBienvenida):
-                try: win.video_terminado.disconnect()
-                except: pass
-        except Exception:
-            pass
-        """Desconecta señales de manera segura, ignorando errores si no estaban conectadas."""
-        try:
-            if isinstance(win, VentanaInteraccion):
-                try: win.video_terminado.disconnect()
-                except: pass
-                try: win.gesto_detectado.disconnect()
-                except: pass
-                try: win.alerta_ayuda_terminada.disconnect()
-                except: pass
-            
-            elif isinstance(win, VentanaReproductorVideo):
-                # PROTECCIÓN EXTRA AQUÍ
-                try: win.transicion_solicitada.disconnect()
-                except Exception: pass # Ignorar cualquier error de desconexión
+                except Exception: pass 
             
             elif isinstance(win, VentanaBienvenida):
                 try: win.video_terminado.disconnect()
@@ -520,6 +497,7 @@ class GestorAplicacion(QObject):
             try:
                 self.ventana_actual.set_modo_reproduccion(False)
                 self.ventana_actual.desbloquear_terminal()
+                # Aquí se activan los gestos de nuevo
                 self._activar_modo_gestos(True)
             except Exception as e:
                 pass
@@ -549,8 +527,15 @@ class GestorAplicacion(QObject):
             QTimer.singleShot(100, vieja.close)
         else:
             self.ventana_actual = nueva
+        
+        # --- LÓGICA CORREGIDA DE ACTIVACIÓN DE GESTOS ---
         if isinstance(nueva, VentanaInteraccion):
-            self._activar_modo_gestos(True)
+            # Si estamos reproduciendo un video (playing=True),
+            # NO activamos gestos todavía. Se activarán en _on_video_finished.
+            if self.playing:
+                self._activar_modo_gestos(False)
+            else:
+                self._activar_modo_gestos(True)
         else:
             self._activar_modo_gestos(False)
 
@@ -687,7 +672,7 @@ class GestorAplicacion(QObject):
             self._set_state(ST.MAIN)
 
     # ==============================================================================
-    # INTEGRACIÓN TICKET CAMARA (COMPATIBLE CON VENTANA ACTUAL)
+    # INTEGRACIÓN TICKET CAMARA
     # ==============================================================================
     def _handle_ticket_number(self, num: int):
         print(f"[DATA] Buscando ticket {num} en archivos locales...")
@@ -721,21 +706,14 @@ class GestorAplicacion(QObject):
         
         # --- ABRIR NUEVA VENTANA TICKET ---
         win = VentanaTicketCamara()
-        
-        # Preparar datos HTML
         texto_ticket_html = render_ticket_html(bundle)
         lista_productos = bundle.get("productos", [])
         
-        # CONFIGURACIÓN CORRECTA: Usando 'configurar_datos'
         win.configurar_datos(texto_ticket_html, lista_productos)
-        
-        # Conectar señal de selección por gestos/touchless
         win.producto_seleccionado.connect(self._handle_product_number)
         
         self.ventana_actual = win
         win.show()
-        
-        # Iniciar cámara de ticket
         win.iniciar_camara_segura()
 
         self._set_state(ST.WAIT_PRODUCT)
@@ -743,11 +721,9 @@ class GestorAplicacion(QObject):
     def _handle_product_number(self, prod_id: int):
         print(f"[GESTOR] Producto seleccionado recibido: {prod_id}")
         
-        # --- CORRECCIÓN ---
-        # No cerramos manualmente la ventana aquí (self.ventana_actual.close()).
-        # Permitimos que la ventana siga viva unos milisegundos más hasta que
-        # _enqueue_and_play -> _play_resp -> _swap se encargue de reemplazarla.
-        # Esto evita cortes en el flujo.
+        # 1. Asegurarnos de que la ventana anterior liberó recursos
+        if isinstance(self.ventana_actual, VentanaTicketCamara):
+            self.ventana_actual.liberar_recursos()
 
         bundle = self.context.get("ticket_bundle")
         if not bundle:
@@ -764,36 +740,14 @@ class GestorAplicacion(QObject):
             return
         
         self._reset_error_count()
-        self.context["productos"].append(prod_id)
+        
+        # Evitar duplicados si el usuario escanea muy rápido
+        if prod_id not in self.context["productos"]:
+            self.context["productos"].append(prod_id)
         
         print("[GESTOR] Transición a siguiente paso (MORE_PRODUCT)...")
-        # Llamada directa sin QTimer para asegurar ejecución inmediata, 
-        # o con un tiempo muy corto.
-        self._enqueue_and_play(["resp7"], ST.MORE_PRODUCT)
-        print(f"[GESTOR] Producto seleccionado recibido: {prod_id}")
         
-        # 1. Asegurarnos de que la ventana anterior liberó recursos
-        if isinstance(self.ventana_actual, VentanaTicketCamara):
-            self.ventana_actual.liberar_recursos()
-            self.ventana_actual.close()
-            self.ventana_actual = None
-
-        bundle = self.context.get("ticket_bundle")
-        if not bundle:
-            self._handle_input_error()
-            return
-        
-        prods_ticket = bundle.get("productos", [])
-        found = next((p for p in prods_ticket if p.get("id") == prod_id), None)
-        
-        if not found:
-            self._handle_input_error()
-            return
-        
-        self._reset_error_count()
-        self.context["productos"].append(prod_id)
-        
-        # Pequeño delay para transición suave a videos
+        # Pequeño delay para transición suave a videos y permitir refresco UI
         QTimer.singleShot(200, lambda: self._enqueue_and_play(["resp7"], ST.MORE_PRODUCT))
 
     def _generar_texto_resumen_string(self) -> str:
