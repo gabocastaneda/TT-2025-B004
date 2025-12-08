@@ -101,7 +101,7 @@ class VentanaTicketCamara(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Consulta Interactiva")
-        self.resize(1280, 720)
+        # Eliminado resize fijo
         
         self.cap = None
         self.mp_hands = mp.solutions.hands
@@ -128,15 +128,44 @@ class VentanaTicketCamara(QMainWindow):
         self.timer_cam.timeout.connect(self._actualizar_frame)
         
         self.dir_images = Path(__file__).resolve().parents[2] / "images"
-        self._init_ui(); self._recolocar()
+        self._init_ui()
+        
+        # Maximizar y recolocar
+        self.showMaximized()
+        QTimer.singleShot(100, self._recolocar)
 
     def _init_ui(self):
+        fpath = self.dir_images / "fondo.png"
+        if fpath.exists():
+            bg_url = str(fpath).replace(chr(92), '/')
+            # Usar border-image para escalar el fondo a todo el widget
+            self.setStyleSheet(f"""
+                QMainWindow {{
+                    border-image: url({bg_url}) 0 0 0 0 stretch stretch;
+                }}
+                QScrollBar:vertical {{ width: 20px; background: #f0f0f0; }}
+                QScrollBar::handle:vertical {{ background: #c0c0c0; border-radius: 10px; }}
+            """)
+        else:
+            self.setStyleSheet("""
+                QMainWindow { background-color: #2c3e50; }
+                QScrollBar:vertical { width: 20px; background: #f0f0f0; }
+                QScrollBar::handle:vertical { background: #c0c0c0; border-radius: 10px; }
+            """)
+
+        # ... resto del método _init_ui ...:
         fpath = self.dir_images / "fondo.png"
         bg = f"url({str(fpath).replace(chr(92), '/')})" if fpath.exists() else "#2c3e50"
         self.setStyleSheet(f"QMainWindow {{ background-image: {bg}; background-repeat: no-repeat; background-position: center; background-attachment: fixed; }} QScrollBar:vertical {{ width: 20px; background: #f0f0f0; }} QScrollBar::handle:vertical {{ background: #c0c0c0; border-radius: 10px; }}")
 
         self.barra = QLabel(self)
-        self.titulo = QLabel("TT 225-B004", self)
+        barra_path = self.dir_images / "barra.png"
+        if barra_path.exists():
+            self.barra.setStyleSheet(f"border-image: url({str(barra_path).replace(chr(92), '/')}) 0 0 0 0 stretch stretch; border: none;")
+        else:
+            self.barra.setStyleSheet("background: #8B1538;")
+
+        self.titulo = QLabel("TT-2025 B004", self) # TÍTULO ACTUALIZADO
         self.titulo.setAlignment(Qt.AlignCenter); self.titulo.setStyleSheet("color: white; letter-spacing: 3px;") 
         self.titulo.setFont(QFont("Arial Black", 24, QFont.Bold))
 

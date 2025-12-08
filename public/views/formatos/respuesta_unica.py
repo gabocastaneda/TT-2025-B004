@@ -16,7 +16,7 @@ class VentanaReproductorVideo(QMainWindow):
     def __init__(self, ruta_video):
         super().__init__()
         self.setWindowTitle("Respuesta Única")
-        self.resize(1280, 720)
+        # Quitamos resize fijo
         self.ruta_video = ruta_video
         self.cap = None
         self.hilo = None
@@ -30,16 +30,17 @@ class VentanaReproductorVideo(QMainWindow):
         if fondo_path.exists():
             self.setStyleSheet(f"""
                 QMainWindow {{
-                    background-image: url({str(fondo_path).replace(chr(92), '/')});
-                    background-repeat: no-repeat;
-                    background-position: center;
-                    background-attachment: fixed;
+                    border-image: url({str(fondo_path).replace(chr(92), '/')}) 0 0 0 0 stretch stretch;
                 }}
             """)
         else:
             self.setStyleSheet("background-color: #2c3e50;")
 
         self._init_ui()
+        
+        # Maximizar al iniciar
+        self.showMaximized()
+        QTimer.singleShot(100, self._recolocar_elementos)
 
     def _init_ui(self):
         # 1. Barra Superior

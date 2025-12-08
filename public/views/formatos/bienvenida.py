@@ -162,16 +162,20 @@ class VentanaBienvenida(QMainWindow):
         # --- Inicialización UI ---
         self.inicializar_ui()
         
+        # Maximizar
+        self.showMaximized()
+        self.actualizar_disposicion()
+        
         # IMPORTANTE: Iniciar detección automáticamente al crear la ventana
         print("[SISTEMA] Ventana de Bienvenida creada, iniciando detección...")
         # Usar QTimer para asegurar que la UI esté completamente renderizada
         QTimer.singleShot(500, self.iniciar_deteccion_persona)
     
     def inicializar_ui(self):
+        # Mantenemos esto por seguridad, pero showMaximized lo anulará positivamente
         geometria_pantalla = QDesktopWidget().screenGeometry()
         self.ancho_pantalla = geometria_pantalla.width()
         self.alto_pantalla = geometria_pantalla.height()
-        self.setGeometry(0, 0, self.ancho_pantalla, self.alto_pantalla)
         
         # --- Configurar imagen de fondo ---
         fondo_path = self.dir_images / "fondo.png"
@@ -180,10 +184,7 @@ class VentanaBienvenida(QMainWindow):
             fondo_str = str(fondo_path).replace("\\", "/")
             self.setStyleSheet(f"""
                 QMainWindow {{
-                    background-image: url({fondo_str});
-                    background-repeat: no-repeat;
-                    background-position: center;
-                    background-attachment: fixed;
+                    border-image: url({fondo_str}) 0 0 0 0 stretch stretch;
                 }}
             """)
         else:

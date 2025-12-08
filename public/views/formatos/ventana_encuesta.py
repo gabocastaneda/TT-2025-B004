@@ -103,7 +103,7 @@ class VentanaEncuesta(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Encuesta de Satisfacción")
-        self.resize(1280, 720)
+        # Quitamos resize fijo y usamos showMaximized al final
         
         self.cap = None
         self.mp_hands = mp.solutions.hands
@@ -125,19 +125,31 @@ class VentanaEncuesta(QMainWindow):
         self.dir_images = Path(__file__).resolve().parents[2] / "images"
         
         self._init_ui()
-        self._recolocar()
+        
+        # Maximizar ventana al inicio
+        self.showMaximized()
+        
+        # Llamamos a recolocar después de mostrar para asegurar geometrías correctas
+        QTimer.singleShot(100, self._recolocar)
 
     def _init_ui(self):
         # Fondo
         fpath = self.dir_images / "fondo.png"
-        bg = f"url({str(fpath).replace(chr(92), '/')})" if fpath.exists() else "#2c3e50"
-        self.setStyleSheet(f"QMainWindow {{ background-image: {bg}; background-repeat: no-repeat; background-position: center; background-attachment: fixed; }}")
+        if fpath.exists():
+            bg_url = str(fpath).replace(chr(92), '/')
+            self.setStyleSheet(f"""
+                QMainWindow {{
+                    border-image: url({bg_url}) 0 0 0 0 stretch stretch;
+                }}
+            """)
+        else:
+            self.setStyleSheet("QMainWindow { background-color: #2c3e50; }")
 
         # Títulos
-        self.titulo = QLabel("ENCUESTA DE SATISFACCIÓN", self)
+        self.titulo = QLabel("TT-2025 B004", self) # TÍTULO SOLICITADO
         self.titulo.setAlignment(Qt.AlignCenter)
         self.titulo.setStyleSheet("background: transparent; color: white; letter-spacing: 2px;") 
-        self.titulo.setFont(QFont("Arial Black", 28, QFont.Bold))
+        self.titulo.setFont(QFont("Arial Black", 24, QFont.Bold))
         
         self.subtitulo = QLabel("Por favor, califique su experiencia manteniendo su dedo índice sobre una opción.", self)
         self.subtitulo.setAlignment(Qt.AlignCenter)
@@ -268,29 +280,36 @@ class VentanaEncuesta(QMainWindow):
     def _recolocar(self):
         w, h = self.width(), self.height()
         
-        # Títulos
-        self.titulo.setGeometry(0, 20, w, 50)
-        self.subtitulo.setGeometry(0, 70, w, 30)
+        # 1. Barra Superior (10% de la pantalla)
+        alto_barra = int(h * 0.1)
+        self.barra.setGeometry(0, 0, w, alto_barra)
+        self.titulo.setGeometry(0, 0, w, alto_barra)
+        
+        # 2. Subtítulo (Debajo de la barra)
+        self.subtitulo.setGeometry(0, alto_barra + 10, w, 30)
         
         # --- AJUSTE DE ASPECT RATIO (CORRECCIÓN DISTORSIÓN) ---
-        # Calculamos el tamaño del recuadro basándonos en la altura disponible
-        # y forzando una proporción 4:3 (estándar de webcam)
+        # Espacio disponible debajo del subtítulo
+        y_inicio_recuadro = alto_barra + 50
+        h_disponible = h - y_inicio_recuadro - 20 # 20px margen inferior
         
-        # Altura objetivo (70% de la ventana aprox)
-        target_h = int(h * 0.70)
-        # Ancho objetivo calculado proporcionalmente (Aspect Ratio 4:3 = 1.33)
+        # Altura objetivo (Maximizando el espacio vertical disponible)
+        target_h = int(h_disponible)
+        # Ancho objetivo (4:3)
         target_w = int(target_h * (4/3))
         
-        # Verificar que quepan los botones (mínimo ~640px)
-        if target_w < 640: target_w = 640
+        # Si el ancho calculado es mayor al ancho de la ventana, ajustamos por ancho
+        if target_w > w - 40: # 40px margen lateral
+            target_w = w - 40
+            target_h = int(target_w * (3/4))
 
         x = (w - target_w) // 2
-        y = (h - target_h) // 2 + 30
+        y = y_inicio_recuadro + (h_disponible - target_h) // 2
         
         self.recuadro.setGeometry(x, y, target_w, target_h)
         self.view_cam.setGeometry(6, 6, target_w - 12, target_h - 12)
         
-        # Opciones en la parte superior
+        # Opciones en la parte superior del recuadro
         self.contenedor_opciones.setGeometry(0, 20, target_w, 150)
         self.cursor_virtual.raise_()
 

@@ -32,8 +32,8 @@ class VentanaInteraccion(QMainWindow):
     def __init__(self, src_inicial: Optional[str] = None):
         super().__init__()
         self.setWindowTitle("Interacción")
-        self.resize(1280, 720)
-
+        # Resize removido
+        
         # Control de estado para el bloqueo
         self.terminal_bloqueada = True
         
@@ -60,10 +60,7 @@ class VentanaInteraccion(QMainWindow):
         if fondo_path.exists():
             self.setStyleSheet(f"""
                 QMainWindow {{
-                    background-image: url({str(fondo_path).replace(chr(92), '/')});
-                    background-repeat: no-repeat;
-                    background-position: center;
-                    background-attachment: fixed;
+                    border-image: url({str(fondo_path).replace(chr(92), '/')}) 0 0 0 0 stretch stretch;
                 }}
             """)
         else:
@@ -278,6 +275,9 @@ class VentanaInteraccion(QMainWindow):
         self._inicializar_inferencia_gestos_estricta()
 
         self._modo_reproduccion = False
+        
+        # Maximizar y recolocar
+        self.showMaximized()
         self._recolocar()
         self.redimensionada.connect(self._recolocar)
 
