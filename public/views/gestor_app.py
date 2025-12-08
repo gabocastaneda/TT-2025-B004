@@ -4,7 +4,7 @@ import sys, requests, traceback, json
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QObject
+from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QObject, QEvent
 from PyQt5.QtWidgets import QApplication
 
 # Importaciones de vistas
@@ -101,8 +101,6 @@ class LocalRepo:
         }
 
 repo = LocalRepo()
-
-
 # ==============================================================================
 # RENDERIZADO HTML (DISEÑO TICKET REAL - FIT TO SCREEN)
 # ==============================================================================
@@ -232,25 +230,70 @@ class GestorAplicacion(QObject):
         self.modo_gestos_activo = False
         self.state = ST.MAIN
         self.consecutive_errors = 0
-        
+            
         self.context = {"branch": None, "razon": None, "ticket_num": None, "ticket_bundle": None, "productos": [], "survey": None}
         self.queue = []; self.next_state_after_queue = None; self.processing_video_end = False
+        
+        self.buffer_teclado = ""
+        self.captura_activa = False
+        self.app.installEventFilter(self)
+        
+        # Timer para inactividad de gestos
+        self.timer_inactividad_gestos = QTimer()
+        self.timer_inactividad_gestos.timeout.connect(self._on_inactividad_gestos)
+        self.timer_inactividad_gestos.setInterval(10000)  # 10 segundos
 
         self.hilo = HiloEntrada()
         self.hilo.senal_txt.connect(lambda s: QTimer.singleShot(0, lambda: self._on_txt_ui_guarded(s)))
         self.hilo.senal_salir.connect(self.app.quit)
         self.hilo.start()
         self.app.aboutToQuit.connect(self._on_quit)
+        
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.KeyPress and self.captura_activa:
+            key_text = event.text()
+            key_code = event.key()
+
+            if key_text.isdigit():
+                self.buffer_teclado += key_text
+                return True
+
+            if key_code in (16777220, 16777221):
+                if self.buffer_teclado.isdigit():
+                    val = int(self.buffer_teclado)
+                    self.buffer_teclado = ""
+                    self._handle_ticket_number(val)
+                    return True
+
+                self.buffer_teclado = ""
+                return True
+
+        return False
 
     def _bloquear(self, on: bool):
         self.playing = bool(on)
         self.hilo.set_habilitado(not on)
+        
+        # Si se está bloqueando (reproduciendo video), detener timer de inactividad
+        if on and self.timer_inactividad_gestos.isActive():
+            self.timer_inactividad_gestos.stop()
+            print("[GESTOR] Timer de inactividad pausado (reproduciendo video)")
+        
         if isinstance(self.ventana_actual, VentanaInteraccion):
-            self.ventana_actual.bloquear_terminal() if on else self.ventana_actual.desbloquear_terminal()
+            if on:
+                self.ventana_actual.bloquear_terminal()
+            else:
+                self.ventana_actual.desbloquear_terminal()
 
     def _on_quit(self):
-        try: self.hilo.detener()
-        except: pass
+        # Detener timer de inactividad
+        if hasattr(self, 'timer_inactividad_gestos'):
+            self.timer_inactividad_gestos.stop()
+        
+        try:
+            self.hilo.detener()
+        except:
+            pass
 
     def _safe_disconnect_all(self, win):
         try:
@@ -283,13 +326,63 @@ class GestorAplicacion(QObject):
         except Exception: return None
 
     def _activar_modo_gestos(self, activar: bool = True):
+        """Activa/desactiva modo gestos y su timer de inactividad"""
+        
+        # NO activar gestos si no estamos en VentanaInteraccion
+        if activar and not isinstance(self.ventana_actual, VentanaInteraccion):
+            print(f"[DEBUG] No activar gestos: ventana actual es {type(self.ventana_actual).__name__}")
+            return
+        
         self.modo_gestos_activo = activar
+        
+        if activar:
+            print(f"[TIMER] Timer de inactividad INICIADO (ventana: {type(self.ventana_actual).__name__})")
+            self.timer_inactividad_gestos.start()
+        else:
+            if self.timer_inactividad_gestos.isActive():
+                print("[TIMER] Timer de inactividad DETENIDO")
+                self.timer_inactividad_gestos.stop()
+        
         if isinstance(self.ventana_actual, VentanaInteraccion):
             self.ventana_actual.set_modo_gestos(activar)
             if activar:
-                try: self.ventana_actual.gesto_detectado.disconnect()
-                except: pass
-                self.ventana_actual.gesto_detectado.connect(lambda s: self._on_txt_ui_guarded(s))
+                try:
+                    self.ventana_actual.gesto_detectado.disconnect()
+                except:
+                    pass
+                self.ventana_actual.gesto_detectado.connect(self._on_gesto_detectado_con_reset)
+                
+    def _on_gesto_detectado_con_reset(self, gesto: str):
+        """Callback cuando se detecta un gesto - resetea timer y procesa entrada"""
+        # Resetear el timer de inactividad
+        if self.modo_gestos_activo:
+            self.timer_inactividad_gestos.stop()
+            self.timer_inactividad_gestos.start()
+            print("[GESTOR] Timer de inactividad reseteado por detección de gesto")
+        
+        # Procesar el gesto normalmente
+        self._on_txt_ui_guarded(gesto)
+        
+    def _on_inactividad_gestos(self):
+        """Se ejecuta cuando pasan 10 segundos sin detectar gestos"""
+        print("[GESTOR] ⚠️ INACTIVIDAD DETECTADA - 10 segundos sin gestos")
+        print("[GESTOR] Volviendo a pantalla de bienvenida...")
+        
+        self.timer_inactividad_gestos.stop()
+        
+        # Resetear contexto
+        self.consecutive_errors = 0
+        self.context = {
+            "branch": None,
+            "razon": None,
+            "ticket_num": None,
+            "ticket_bundle": None,
+            "productos": [],
+            "survey": None
+        }
+        
+        # Volver a bienvenida
+        self.mostrar_bienvenida()
 
     def _mostrar_error_entrada(self):
         if isinstance(self.ventana_actual, VentanaInteraccion): self.ventana_actual.mostrar_error_captura()
@@ -435,10 +528,11 @@ class GestorAplicacion(QObject):
 
     def _set_state(self, st: str):
         self.state = st
-        if self.state == ST.WAIT_TICKET: self._activar_modo_gestos(False)
+        if self.state == ST.WAIT_TICKET: self.captura_activa = True; self.buffer_teclado = ""; self._activar_modo_gestos(False)
         elif self.state == ST.SURVEY:
             self._lanzar_ventana_encuesta()
             return
+        else: self.captura_activa = False; self.buffer_teclado = ""
         self._print_prompt()
 
     def _print_prompt(self):
@@ -554,25 +648,75 @@ class GestorAplicacion(QObject):
 
     def _lanzar_ventana_ticket(self):
         print("[SISTEMA] Lanzando VentanaTicketCamara...")
+
+        # ============================
+        # 🔥 1. APAGAR GESTOS COMPLETAMENTE
+        # ============================
+        try:
+            print("[GESTOS] Desactivando gestos y timer para captura de producto...")
+            self._activar_modo_gestos(False)          # apaga detector + timer
+            if self.timer_inactividad_gestos.isActive():
+                self.timer_inactividad_gestos.stop()
+                print("[GESTOR] Timer de inactividad DETENIDO (modo ticket)")
+        except Exception as e:
+            print("[GESTOS] Error al desactivar gestos:", e)
+
+        # ============================
+        # 🔥 2. LIBERAR RECURSOS DE VENTANA ANTERIOR
+        # ============================
+        if isinstance(self.ventana_actual, VentanaInteraccion):
+            self._safe_disconnect_all(self.ventana_actual)
+            try:
+                self.ventana_actual.close()
+            except:
+                pass
+
+        # ============================
+        # 🔥 3. LIBERAR MODELO DE GESTOS / MEDIAPIPE
+        # ============================
+        try:
+            if hasattr(self, "gestor_gestos"):
+                print("[GESTOS] Liberando recursos MediaPipe antes de abrir cámara...")
+                self.gestor_gestos.liberar_recursos()
+        except Exception as e:
+            print("[GESTOS] Error liberando recursos:", e)
+
+        # ============================
+        # 🔥 4. VALIDAR BUNDLE
+        # ============================
         bundle = self.context.get("ticket_bundle")
         if not bundle:
             print("[ERROR] Intento de abrir cámara sin bundle de ticket.")
-            self._set_state(ST.MAIN); return
+            self._set_state(ST.MAIN)
+            return
 
-        if isinstance(self.ventana_actual, VentanaInteraccion):
-            self._safe_disconnect_all(self.ventana_actual)
-            self.ventana_actual.close()
-        
+        # ============================
+        # 🔥 5. CREAR NUEVA VENTANA CAMERA
+        # ============================
         win = VentanaTicketCamara()
         texto_ticket_html = render_ticket_html(bundle)
         lista_productos = bundle.get("productos", [])
-        
+
         win.configurar_datos(texto_ticket_html, lista_productos)
         win.producto_seleccionado.connect(self._handle_product_number)
-        
+
         self.ventana_actual = win
-        win.show(); win.iniciar_camara_segura()
-        self._bloquear(False); self.state = ST.WAIT_PRODUCT
+        win.show()
+
+        # ============================
+        # 🔥 6. INICIAR CÁMARA
+        # ============================
+        win.iniciar_camara_segura()
+
+        # ============================
+        # 🔥 7. SIN GESTOS — SIN TIMER — SOLO TECLADO
+        # ============================
+        self._bloquear(False)
+        self.state = ST.WAIT_PRODUCT
+        self._print_prompt()
+
+        print("[SISTEMA] Cámara iniciada (gestos desactivados correctamente)")
+
 
     def _handle_product_number(self, prod_id: int):
         print(f"[GESTOR] Producto seleccionado recibido: {prod_id}")
@@ -646,35 +790,70 @@ class GestorAplicacion(QObject):
         return "\n".join(lineas)
 
     def _mostrar_resumen_y_finalizar(self):
-        if isinstance(self.ventana_actual, VentanaEncuesta):
-            self.ventana_actual.liberar_recursos()
-            self.ventana_actual.close()
-
+        
+        """Después de la encuesta: generar resumen, limpiar contexto y reiniciar TODO el flujo."""
+        
+        # 1. Generar y enviar resumen
         self.notificacion_counter += 1
         cuerpo_resumen = self._generar_texto_resumen_string()
         
         lineas = []
         lineas.append("✅ RESUMEN FINAL DE LA INTERACCIÓN")
         lineas.append(f"📦 SEGUIMIENTO: #{self.notificacion_counter:04d}")
-        lineas.append("═" * 60)
+        lineas.append("╔" + "═" * 58 + "╗")
         lineas.append(cuerpo_resumen)
-        lineas.append("═" * 60)
+        lineas.append("╚" + "═" * 58 + "╝")
         
         mensaje_completo = "\n".join(lineas)
         print("\n" + mensaje_completo + "\n")
         self._enviar_telegram(mensaje_completo)
-        
+
+        # 2. Apagar modo gestos + timers
+        self._activar_modo_gestos(False)
+        if self.timer_inactividad_gestos.isActive():
+            self.timer_inactividad_gestos.stop()
+
+        # 3. Cerrar ventana activa
+        if self.ventana_actual:
+            try:
+                self._safe_disconnect_all(self.ventana_actual)
+                self.ventana_actual.close()
+            except:
+                pass
+
+        # 4. Resetear contexto completamente
         self.consecutive_errors = 0
-        self.context = {"branch": None, "razon": None, "ticket_num": None, "ticket_bundle": None, "productos": [], "survey": None}
-        self._enqueue_and_play(["resp1"], ST.MAIN)
+        self.context = {
+            "branch": None,
+            "razon": None,
+            "ticket_num": None,
+            "ticket_bundle": None,
+            "productos": [],
+            "survey": None
+        }
+
+        # 5. Reiniciar todo el flujo → bienvenida real
+        print("[SISTEMA] Reiniciando ciclo completo después de encuesta...")
+        QTimer.singleShot(1200, self.mostrar_bienvenida)
 
     def mostrar_bienvenida(self):
+        """Reinicia la bienvenida con detección completa desde cero."""
         dest = self.dir_videos / "bienvenida.mp4"
+
+        print("[SISTEMA] Mostrando pantalla de bienvenida...")
+
+        # Forzar bloqueo (video reproducción) y desactivar gestos
+        self._bloquear(True)
+        self._activar_modo_gestos(False)
+
+        # Crear ventana nueva SIEMPRE (no reutilizar)
         win = VentanaBienvenida(str(dest) if dest.is_file() else None)
         self._safe_disconnect_all(win)
         win.video_terminado.connect(self._after_bienvenida)
-        self._bloquear(True)
+
         self._swap(win)
+
+
 
     def _after_bienvenida(self):
         print("[FLUJO] Inicio -> Resp14 (Instrucciones de captura)...")
