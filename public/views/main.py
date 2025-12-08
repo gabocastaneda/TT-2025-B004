@@ -3,6 +3,7 @@
 # public/views/main.py
 import sys
 from pathlib import Path
+import time
 
 # Asegura que el PADRE de "public" esté en sys.path para que funcione "import public.*"
 _THIS = Path(__file__).resolve()
@@ -29,4 +30,7 @@ from public.views.gestor_app import GestorAplicacion
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    GestorAplicacion(app).run()
+    gestor = GestorAplicacion(app)
+    while True:
+        gestor.run()
+        time.sleep(2)

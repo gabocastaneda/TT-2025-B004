@@ -282,7 +282,7 @@ class VentanaEncuesta(QMainWindow):
         
         # 1. Barra Superior (10% de la pantalla)
         alto_barra = int(h * 0.1)
-        self.barra.setGeometry(0, 0, w, alto_barra)
+        # self.barra.setGeometry(0, 0, w, alto_barra)
         self.titulo.setGeometry(0, 0, w, alto_barra)
         
         # 2. Subtítulo (Debajo de la barra)

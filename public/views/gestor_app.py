@@ -3,6 +3,7 @@
 import sys, requests, traceback, json
 from pathlib import Path
 from typing import List, Optional
+import time
 
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QObject, QEvent
 from PyQt5.QtWidgets import QApplication
@@ -834,7 +835,8 @@ class GestorAplicacion(QObject):
 
         # 5. Reiniciar todo el flujo → bienvenida real
         print("[SISTEMA] Reiniciando ciclo completo después de encuesta...")
-        QTimer.singleShot(1200, self.mostrar_bienvenida)
+        time.sleep(1.5)
+        self.mostrar_bienvenida()
 
     def mostrar_bienvenida(self):
         """Reinicia la bienvenida con detección completa desde cero."""
