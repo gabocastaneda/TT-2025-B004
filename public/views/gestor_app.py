@@ -3,6 +3,7 @@
 import sys, requests, traceback, json
 from pathlib import Path
 from typing import List, Optional
+import time
 
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer, QObject, QEvent
 from PyQt5.QtWidgets import QApplication
@@ -790,7 +791,6 @@ class GestorAplicacion(QObject):
         return "\n".join(lineas)
 
     def _mostrar_resumen_y_finalizar(self):
-        
         """Después de la encuesta: generar resumen, limpiar contexto y reiniciar TODO el flujo."""
         
         # 1. Generar y enviar resumen
@@ -817,12 +817,28 @@ class GestorAplicacion(QObject):
         if self.ventana_actual:
             try:
                 self._safe_disconnect_all(self.ventana_actual)
+                # 🔥 LIBERAR RECURSOS DE CÁMARA SI ES ENCUESTA
+                if isinstance(self.ventana_actual, VentanaEncuesta):
+                    try:
+                        self.ventana_actual.liberar_recursos()
+                    except:
+                        pass
                 self.ventana_actual.close()
-            except:
-                pass
+                self.ventana_actual = None  # 🔥 IMPORTANTE: Limpiar referencia
+            except Exception as e:
+                print(f"[ERROR] Al cerrar ventana: {e}")
 
-        # 4. Resetear contexto completamente
+        # 4. 🔥 RESETEAR *TODOS* LOS ESTADOS DE FLUJO
         self.consecutive_errors = 0
+        self.state = ST.MAIN  # 🔥 RESETEAR ESTADO EXPLÍCITAMENTE
+        self.playing = False  # 🔥 LIBERAR BLOQUEO
+        self.processing_video_end = False  # 🔥 LIMPIAR FLAG
+        self.queue = []  # 🔥 LIMPIAR COLA
+        self.next_state_after_queue = None  # 🔥 LIMPIAR SIGUIENTE
+        self.captura_activa = False  # 🔥 DESHABILITAR CAPTURA TECLADO
+        self.buffer_teclado = ""  # 🔥 LIMPIAR BUFFER
+        
+        # 🔥 RESETEAR CONTEXTO COMPLETAMENTE
         self.context = {
             "branch": None,
             "razon": None,
@@ -832,9 +848,12 @@ class GestorAplicacion(QObject):
             "survey": None
         }
 
-        # 5. Reiniciar todo el flujo → bienvenida real
-        print("[SISTEMA] Reiniciando ciclo completo después de encuesta...")
-        QTimer.singleShot(1200, self.mostrar_bienvenida)
+        # 5. 🔥 ASEGURAR QUE EL HILO ESTÉ HABILITADO
+        self.hilo.set_habilitado(True)
+
+        # 6. Reiniciar todo el flujo → bienvenida real
+        time.sleep(1.5)
+        self.mostrar_bienvenida()
 
     def mostrar_bienvenida(self):
         """Reinicia la bienvenida con detección completa desde cero."""
