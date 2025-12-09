@@ -29,8 +29,8 @@ class HiloDeteccionPersona(QThread):
         self.pose = self.mp_pose.Pose(
             static_image_mode=False,
             model_complexity=0,  # Modelo ligero para mayor velocidad
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
+            min_detection_confidence=0.8,
+            min_tracking_confidence=0.8
         )
         self.mp_drawing = mp.solutions.drawing_utils
         
