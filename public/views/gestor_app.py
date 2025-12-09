@@ -800,7 +800,7 @@ class GestorAplicacion(QObject):
         
         lineas = []
         lineas.append("✅ RESUMEN FINAL DE LA INTERACCIÓN")
-        lineas.append(f"📦 SEGUIMIENTO: #{self.notificacion_counter:04d}")
+        lineas.append(f"📦 SEGUIMIENTO: # DEV{self.notificacion_counter:04d}")
         lineas.append("╔" + "═" * 58 + "╗")
         lineas.append(cuerpo_resumen)
         lineas.append("╚" + "═" * 58 + "╝")
