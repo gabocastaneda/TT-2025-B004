@@ -12,6 +12,69 @@ from PyQt5.QtGui import (QPixmap, QImage, QFont, QColor, QPainter, QPen,
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer, QPoint, QRect
 
 # ==============================================================================
+# CLASE: BOTÓN INTERACTIVO (ESTILO BLANCO / CONSOLA / CURVO)
+# ==============================================================================
+class BotonInteractivo(QLabel):
+    def __init__(self, texto, parent=None):
+        super().__init__(parent)
+        self.setText(texto)
+        self.setAlignment(Qt.AlignCenter)
+        # Tipografía Consolas, negrita
+        self.setFont(QFont("Consolas", 16, QFont.Bold))
+        self.progreso = 0.0
+        self.seleccionado = False
+        
+        # Estilo solicitado: Blanco, letras negras, borde curvo
+        self.setStyleSheet("""
+            BotonInteractivo {
+                background-color: #ffffff;
+                color: #000000;
+                border: 2px solid #000000;
+                border-radius: 25px; 
+                padding: 5px;
+            }
+        """)
+        
+        # Sombra sutil
+        sombra = QGraphicsDropShadowEffect(self)
+        sombra.setBlurRadius(15)
+        sombra.setColor(QColor(0, 0, 0, 50))
+        sombra.setOffset(3, 3)
+        self.setGraphicsEffect(sombra)
+
+    def actualizar_progreso(self, valor):
+        self.progreso = valor
+        self.update()
+
+    def paintEvent(self, event):
+        # 1. Dibujar el estilo base (fondo blanco, texto negro)
+        super().paintEvent(event)
+
+        # 2. Dibujar la barra de progreso superpuesta si hay interacción
+        if self.progreso > 0:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing)
+            
+            path = QPainterPath()
+            rect = self.rect()
+            # Ajustamos el path al borde muy redondeado (25px)
+            path.addRoundedRect(0, 0, rect.width(), rect.height(), 25, 25)
+            painter.setClipPath(path)
+
+            # Relleno amarillo semitransparente
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QBrush(QColor(255, 193, 7, 150)))
+            
+            ancho_relleno = int(self.width() * self.progreso)
+            painter.drawRect(0, 0, ancho_relleno, self.height())
+
+            # Si se completa, borde dorado brillante
+            if self.progreso >= 1.0:
+                painter.setBrush(Qt.NoBrush)
+                painter.setPen(QPen(QColor(255, 215, 0), 4))
+                painter.drawPath(path)
+
+# ==============================================================================
 # CLASE: WIDGET DE PRODUCTO (ESTILO TARJETA 3D)
 # ==============================================================================
 class ItemProducto(QFrame):
@@ -101,7 +164,6 @@ class VentanaTicketCamara(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Consulta Interactiva")
-        # Eliminado resize fijo
         
         self.cap = None
         self.mp_hands = mp.solutions.hands
@@ -112,17 +174,13 @@ class VentanaTicketCamara(QMainWindow):
             min_tracking_confidence=0.7
         )
         
-        self.modo_seleccion = False
+        self.modo_seleccion = False # False = Viendo Ticket/Botón, True = Seleccionando Producto
         self.items_productos = []
-        self.producto_bajo_cursor = None
+        self.objeto_bajo_cursor = None # Puede ser ItemProducto o BotonInteractivo
         self.tiempo_inicio_hover = 0
         self.TIEMPO_PARA_SELECCIONAR = 2.0 
         self.left_hand_prev_y = None
         self.left_hand_active_scroll = False
-        
-        self.segundos_restantes = 10
-        self.timer_countdown = QTimer(self)
-        self.timer_countdown.timeout.connect(self._on_tick_countdown)
         
         self.timer_cam = QTimer(self)
         self.timer_cam.timeout.connect(self._actualizar_frame)
@@ -136,27 +194,35 @@ class VentanaTicketCamara(QMainWindow):
 
     def _init_ui(self):
         fpath = self.dir_images / "fondo.png"
-        if fpath.exists():
-            bg_url = str(fpath).replace(chr(92), '/')
-            # Usar border-image para escalar el fondo a todo el widget
-            self.setStyleSheet(f"""
-                QMainWindow {{
-                    border-image: url({bg_url}) 0 0 0 0 stretch stretch;
-                }}
-                QScrollBar:vertical {{ width: 20px; background: #f0f0f0; }}
-                QScrollBar::handle:vertical {{ background: #c0c0c0; border-radius: 10px; }}
-            """)
-        else:
-            self.setStyleSheet("""
-                QMainWindow { background-color: #2c3e50; }
-                QScrollBar:vertical { width: 20px; background: #f0f0f0; }
-                QScrollBar::handle:vertical { background: #c0c0c0; border-radius: 10px; }
-            """)
-
-        # ... resto del método _init_ui ...:
-        fpath = self.dir_images / "fondo.png"
         bg = f"url({str(fpath).replace(chr(92), '/')})" if fpath.exists() else "#2c3e50"
-        self.setStyleSheet(f"QMainWindow {{ background-image: {bg}; background-repeat: no-repeat; background-position: center; background-attachment: fixed; }} QScrollBar:vertical {{ width: 20px; background: #f0f0f0; }} QScrollBar::handle:vertical {{ background: #c0c0c0; border-radius: 10px; }}")
+        
+        # ESTILOS ACTUALIZADOS: SCROLLBAR DISCRETO (8px)
+        self.setStyleSheet(f"""
+            QMainWindow {{ 
+                background-image: {bg}; 
+                background-repeat: no-repeat; 
+                background-position: center; 
+                background-attachment: fixed; 
+            }}
+            
+            /* SCROLLBAR DISCRETO */
+            QScrollBar:vertical {{ 
+                width: 8px; 
+                background: transparent;
+                margin: 0px;
+            }}
+            QScrollBar::handle:vertical {{ 
+                background: #b0b0b0; 
+                min-height: 20px;
+                border-radius: 4px;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+                background: none;
+            }}
+        """)
 
         self.barra = QLabel(self)
         barra_path = self.dir_images / "barra.png"
@@ -165,7 +231,7 @@ class VentanaTicketCamara(QMainWindow):
         else:
             self.barra.setStyleSheet("background: #8B1538;")
 
-        self.titulo = QLabel("TT-2025 B004", self) # TÍTULO ACTUALIZADO
+        self.titulo = QLabel("TT-2025 B004", self)
         self.titulo.setAlignment(Qt.AlignCenter); self.titulo.setStyleSheet("color: white; letter-spacing: 3px;") 
         self.titulo.setFont(QFont("Arial Black", 24, QFont.Bold))
 
@@ -179,7 +245,11 @@ class VentanaTicketCamara(QMainWindow):
         self.contenedor_flotante = QWidget(self.recuadro)
         self.contenedor_flotante.setStyleSheet("background: transparent;")
         
-        # --- VISTA A: TICKET PRINCIPAL (Estilo 3D Unificado) ---
+        # BOTÓN CONSULTA (Estilizado en la clase BotonInteractivo)
+        self.btn_consulta = BotonInteractivo("CONSULTA DE PRODUCTOS", self.contenedor_flotante)
+        self.btn_consulta.hide()
+        
+        # --- VISTA A: TICKET PRINCIPAL ---
         self.lbl_ticket = QLabel(self.contenedor_flotante)
         self.lbl_ticket.setWordWrap(True)
         self.lbl_ticket.setAlignment(Qt.AlignTop | Qt.AlignLeft)
@@ -197,15 +267,10 @@ class VentanaTicketCamara(QMainWindow):
         sombra.setBlurRadius(30); sombra.setColor(QColor(0,0,0,150)); sombra.setOffset(10, 15)
         self.lbl_ticket.setGraphicsEffect(sombra)
 
-        self.lbl_contador = QLabel(self.lbl_ticket)
-        self.lbl_contador.setFont(QFont("Segoe UI", 14, QFont.Bold))
-        self.lbl_contador.setStyleSheet("color: #e74c3c; background: transparent; border: none;")
-        self.lbl_contador.setAlignment(Qt.AlignRight | Qt.AlignBottom)
-        self.lbl_contador.hide()
-        
         # --- VISTA B: LISTA PRODUCTOS ---
         self.scroll_area = QScrollArea(self.contenedor_flotante)
         self.scroll_area.setWidgetResizable(True)
+        # Política de Scroll: Aparece solo si es necesario (AsNeeded)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll_area.setStyleSheet("background: transparent; border: none;")
@@ -231,28 +296,15 @@ class VentanaTicketCamara(QMainWindow):
         if self.cap.isOpened():
             print("[CAMARA] Iniciada.")
             self.timer_cam.start(30)
-            self.segundos_restantes = 10
-            self._actualizar_contador_visual()
-            self.lbl_contador.show()
-            self.timer_countdown.start(1000) 
+            self.cursor_virtual.show() 
         else:
             self.intentos_camara += 1
             if self.intentos_camara < 5: QTimer.singleShot(500, self._intentar_abrir_camara)
 
-    def _on_tick_countdown(self):
-        self.segundos_restantes -= 1
-        self._actualizar_contador_visual()
-        if self.segundos_restantes <= 0:
-            self.timer_countdown.stop()
-            self._activar_fase_seleccion()
-
-    def _actualizar_contador_visual(self):
-        self.lbl_contador.setText(f"[ INICIO EN: {self.segundos_restantes:02d} s ]")
-        w_t = self.lbl_ticket.width(); h_t = self.lbl_ticket.height()
-        self.lbl_contador.setGeometry(w_t - 240, h_t - 45, 220, 35)
-
     def configurar_datos(self, html_ticket, lista_productos):
         self.lbl_ticket.setText(html_ticket); self.lbl_ticket.show()
+        self.btn_consulta.show()
+        
         for i in reversed(range(self.layout_lista.count())): 
             w = self.layout_lista.itemAt(i).widget(); 
             if w: w.setParent(None)
@@ -270,13 +322,18 @@ class VentanaTicketCamara(QMainWindow):
             self.layout_lista.addWidget(item)
             self.items_productos.append(item)
         self.layout_lista.addStretch()
+        
+        self._recolocar()
 
     def _activar_fase_seleccion(self):
-        self.modo_seleccion = True; self.lbl_ticket.hide(); self.lbl_contador.hide()
-        self.scroll_area.show(); self.cursor_virtual.show()
+        print("[INTERACCION] Cambiando a vista de selección de productos.")
+        self.modo_seleccion = True
+        self.btn_consulta.hide()
+        self.lbl_ticket.hide()
+        self.scroll_area.show()
 
     def liberar_recursos(self):
-        self.timer_cam.stop(); self.timer_countdown.stop()
+        self.timer_cam.stop()
         if self.cap: self.cap.release(); self.cap = None
         if self.hands: self.hands.close(); self.hands = None
         self.modo_seleccion = False
@@ -293,7 +350,7 @@ class VentanaTicketCamara(QMainWindow):
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             x_c, y_c = -1, -1
             
-            if self.modo_seleccion and self.hands:
+            if self.hands:
                 res = self.hands.process(rgb)
                 if res.multi_hand_landmarks and res.multi_handedness:
                     for i, lm in enumerate(res.multi_hand_landmarks):
@@ -305,7 +362,7 @@ class VentanaTicketCamara(QMainWindow):
                             vr = self.view_cam.geometry()
                             x_c = vr.x() + int(cx * (vr.width()/w))
                             y_c = vr.y() + int(cy * (vr.height()/h))
-                        elif lbl == "Left": # Scroll
+                        elif lbl == "Left" and self.modo_seleccion: # Scroll
                             wrist = lm.landmark[0]
                             cy_p = int(wrist.y * h)
                             if self._is_palm_open(lm):
@@ -325,27 +382,48 @@ class VentanaTicketCamara(QMainWindow):
 
             qimg = QImage(rgb.data, w, h, w*3, QImage.Format_RGB888)
             self.view_cam.setPixmap(QPixmap.fromImage(qimg).scaled(self.view_cam.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            
             if x_c != -1:
                 self.cursor_virtual.move(x_c - 15, y_c - 15); self.cursor_virtual.raise_()
                 self._procesar_interaccion(x_c, y_c)
+            else:
+                if self.objeto_bajo_cursor:
+                    self.objeto_bajo_cursor.actualizar_progreso(0.0)
+                    self.objeto_bajo_cursor = None
 
     def _procesar_interaccion(self, cx, cy):
         pos = self.recuadro.mapToGlobal(QPoint(cx, cy))
         hov = None
-        for it in self.items_productos:
-            if it.isVisible() and QRect(it.mapToGlobal(QPoint(0,0)), it.size()).contains(pos): hov = it; break
+        lista_objetivos = []
+        
+        if not self.modo_seleccion:
+            if self.btn_consulta.isVisible():
+                lista_objetivos = [self.btn_consulta]
+        else:
+            lista_objetivos = self.items_productos
+            
+        for it in lista_objetivos:
+            if it.isVisible() and QRect(it.mapToGlobal(QPoint(0,0)), it.size()).contains(pos): 
+                hov = it; break
         
         if hov:
-            if self.producto_bajo_cursor == hov:
+            if self.objeto_bajo_cursor == hov:
                 prog = min((time.time() - self.tiempo_inicio_hover) / self.TIEMPO_PARA_SELECCIONAR, 1.0)
                 hov.actualizar_progreso(prog)
-                if prog >= 1.0 and not hov.seleccionado: self._confirmar_seleccion(hov)
+                if prog >= 1.0:
+                    if isinstance(hov, BotonInteractivo):
+                         self._activar_fase_seleccion()
+                         self.objeto_bajo_cursor = None 
+                    elif isinstance(hov, ItemProducto):
+                         if not hov.seleccionado: self._confirmar_seleccion(hov)
             else:
-                if self.producto_bajo_cursor: self.producto_bajo_cursor.actualizar_progreso(0.0)
-                self.producto_bajo_cursor = hov; self.tiempo_inicio_hover = time.time(); hov.actualizar_progreso(0.1)
+                if self.objeto_bajo_cursor: self.objeto_bajo_cursor.actualizar_progreso(0.0)
+                self.objeto_bajo_cursor = hov
+                self.tiempo_inicio_hover = time.time()
+                hov.actualizar_progreso(0.1)
         else:
-            if self.producto_bajo_cursor: self.producto_bajo_cursor.actualizar_progreso(0.0)
-            self.producto_bajo_cursor = None
+            if self.objeto_bajo_cursor: self.objeto_bajo_cursor.actualizar_progreso(0.0)
+            self.objeto_bajo_cursor = None
 
     def _confirmar_seleccion(self, item):
         item.seleccionado = True
@@ -355,17 +433,26 @@ class VentanaTicketCamara(QMainWindow):
 
     def resizeEvent(self, ev):
         self._recolocar()
-        if not self.lbl_ticket.isHidden(): self._actualizar_contador_visual()
         super().resizeEvent(ev)
 
     def _recolocar(self):
         w, h = self.width(), self.height()
         self.barra.setGeometry(0, 0, w, int(h*0.1)); self.titulo.setGeometry(0, 0, w, int(h*0.1))
+        
         tw = min(w-60, int((h-int(h*0.1)-50)*(4/3)))
         self.recuadro.setGeometry((w-tw)//2, int(h*0.1)+20, tw, h-int(h*0.1)-50)
         self.view_cam.setGeometry(8, 8, tw-16, self.recuadro.height()-16)
+        
         fw, fh = int(tw*0.4), int(self.recuadro.height()*0.9)
         self.contenedor_flotante.setGeometry(tw-fw-20, (self.recuadro.height()-fh)//2, fw, fh)
-        self.lbl_ticket.setGeometry(0,0,fw,fh); self.scroll_area.setGeometry(0,0,fw,fh); self.cursor_virtual.raise_()
+        
+        h_btn = 60
+        margin_btn = 15
+        h_restante = fh - h_btn - margin_btn
+        
+        self.btn_consulta.setGeometry(0, 0, fw, h_btn)
+        self.lbl_ticket.setGeometry(0, h_btn + margin_btn, fw, h_restante)
+        self.scroll_area.setGeometry(0, 0, fw, fh) 
+        self.cursor_virtual.raise_()
 
     def closeEvent(self, ev): self.liberar_recursos(); super().closeEvent(ev)
