@@ -105,13 +105,31 @@ class ItemProducto(QFrame):
         
         self.lbl_img = QLabel(self)
         self.lbl_img.setFixedSize(img_size, img_size); self.lbl_img.setScaledContents(True)
-        img_rel = data_producto.get("imagen", "")
+        img_rel = data_producto.get("imagen", "")  
         if img_rel:
             full_path = base_img_path / img_rel
             if not full_path.exists(): full_path = base_img_path / Path(img_rel).name
             if full_path.exists(): self.lbl_img.setPixmap(QPixmap(str(full_path)))
             else: self.lbl_img.setText("Sin Foto")
         layout_main.addWidget(self.lbl_img)
+        if img_rel:
+            full_path = base_img_path / img_rel
+            print(f"[DEBUG] Buscando imagen: {full_path}")
+            print(f"[DEBUG] Existe: {full_path.exists()}")
+    
+            if not full_path.exists(): 
+                full_path = base_img_path / Path(img_rel).name
+                print(f"[DEBUG] Intentando path alternativo: {full_path}")
+                print(f"[DEBUG] Existe: {full_path.exists()}")
+    
+            if full_path.exists(): 
+                self.lbl_img.setPixmap(QPixmap(str(full_path)))
+                print(f"[DEBUG] ✅ Imagen cargada: {full_path.name}")
+            else:
+                self.lbl_img.setText("Sin Foto")
+                print(f"[DEBUG] ❌ NO ENCONTRADA")
+        else:
+            self.lbl_img.setText("Sin ruta")
 
         layout_texto = QVBoxLayout()
         layout_texto.setSpacing(2); layout_texto.setAlignment(Qt.AlignVCenter)
