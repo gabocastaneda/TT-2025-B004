@@ -15,6 +15,9 @@ from public.views.formatos.interaccion import VentanaInteraccion
 from public.views.formatos.ventana_ticket_camara import VentanaTicketCamara
 from public.views.formatos.ventana_encuesta import VentanaEncuesta
 
+# impoortacion del logger
+from public.views.logger_metricas import LoggerMetricas
+
 TG_TOKEN = "8567289049:AAF1lFThXzqpu2ptbHUcAkS3-b6CKEUmaEI"
 TG_CHAT_ID = "1794777471"
 
@@ -244,11 +247,41 @@ class GestorAplicacion(QObject):
         self.timer_inactividad_gestos.timeout.connect(self._on_inactividad_gestos)
         self.timer_inactividad_gestos.setInterval(10000)  # 10 segundos
 
+        # Agregamos el logger
+        self.logger = LoggerMetricas(Path(__file__).resolve().parents[1])
+
         self.hilo = HiloEntrada()
         self.hilo.senal_txt.connect(lambda s: QTimer.singleShot(0, lambda: self._on_txt_ui_guarded(s)))
         self.hilo.senal_salir.connect(self.app.quit)
         self.hilo.start()
         self.app.aboutToQuit.connect(self._on_quit)
+        
+        self.app.aboutToQuit.connect(self._on_app_quit)
+        
+    def _on_app_quit(self):
+        """Se ejecuta cuando la aplicación está a punto de cerrarse"""
+        print("\n" + "="*70)
+        print("CERRANDO APLICACIÓN - GENERANDO REPORTE FINAL")
+        print("="*70)
+        
+        # Registrar cierre en logger
+        self.logger.registrar_cierre_aplicacion()
+        
+        # Mostrar reporte en consola
+        print(self.logger.obtener_reporte_completo())
+        
+        # Detener timer de inactividad
+        if hasattr(self, 'timer_inactividad_gestos'):
+            self.timer_inactividad_gestos.stop()
+        
+        # Detener hilo de entrada
+        try:
+            self.hilo.detener()
+        except:
+            pass
+        
+        print("\nLogs guardados exitosamente")
+        print(f"Ubicación: {self.logger.base_path}")
         
     def eventFilter(self, obj, event):
         if event.type() == QEvent.KeyPress and self.captura_activa:
@@ -367,6 +400,8 @@ class GestorAplicacion(QObject):
     def _on_inactividad_gestos(self):
         """Se ejecuta cuando pasan 10 segundos sin detectar gestos"""
         print("[GESTOR] ⚠️ INACTIVIDAD DETECTADA - 10 segundos sin gestos")
+        # logger
+        self.logger.registrar_timeout_inactividad()
         print("[GESTOR] Volviendo a pantalla de bienvenida...")
         
         self.timer_inactividad_gestos.stop()
@@ -390,6 +425,8 @@ class GestorAplicacion(QObject):
 
     def _handle_input_error(self):
         self.consecutive_errors += 1
+        # logger
+        self.logger.registrar_error_captura(self.state, "entrada invalidad")
         print(f"[DEBUG] Error input #{self.consecutive_errors}")
         if self.consecutive_errors >= 3: self._trigger_usability_alert()
         else: self._mostrar_error_entrada(); self._print_prompt()
@@ -415,6 +452,8 @@ class GestorAplicacion(QObject):
     def _trigger_usability_alert(self):
         print("\n!!! ALERTA DE USABILIDAD - 3 ERRORES CONSECUTIVOS !!!")
         self.notificacion_counter += 1
+        # logger
+        self.logger.registrar_alerta_usabilidad(self.state, self.consecutive_errors)
         paso_detenido = self._get_descripcion_estado_actual()
         resumen_texto = self._generar_texto_resumen_string()
         msg_telegram = (f"🚨 APOYO EN CAPTURA DE SISTEMA 🚨\n📦 SEGUIMIENTO: #{self.notificacion_counter:04d}\n"
@@ -582,6 +621,7 @@ class GestorAplicacion(QObject):
                 self.context = {k:None for k in self.context}
                 self.context["productos"] = []
                 self.context["branch"] = "devolucion"
+                self.logger.registrar_rama("devolucion") # logger
                 self._enqueue_and_play(["resp11"], ST.DEV_MENU)
             else: self._handle_input_error()
 
@@ -589,7 +629,8 @@ class GestorAplicacion(QObject):
             if v == "producto":
                 self._reset_error_count(); self._enqueue_and_play(["resp12"], ST.DEV_REASON)
             elif v == "ninguno":
-                self._reset_error_count(); self._enqueue_and_play(["resp2","resp3"], ST.RESP3_NINGUNO)
+                # se añadió el logger
+                self._reset_error_count(); self.logger.registrar_sin_solucion(); self._enqueue_and_play(["resp2","resp3"], ST.RESP3_NINGUNO)
             else: self._handle_input_error()
 
         elif self.state == ST.DEV_REASON:
@@ -756,6 +797,8 @@ class GestorAplicacion(QObject):
         print(f"[ENCUESTA] Valor recibido: {val}")
         self._reset_error_count()
         self.context["survey"] = val
+        # logger
+        self.logger.registrar_calificacion(val)
         self._mostrar_resumen_y_finalizar()
 
     # ==============================================================================
@@ -808,6 +851,8 @@ class GestorAplicacion(QObject):
         mensaje_completo = "\n".join(lineas)
         print("\n" + mensaje_completo + "\n")
         self._enviar_telegram(mensaje_completo)
+        # logger
+        self.logger.registrar_fin_sesion(exito = True)
 
         # 2. Apagar modo gestos + timers
         self._activar_modo_gestos(False)
@@ -840,6 +885,9 @@ class GestorAplicacion(QObject):
 
     def mostrar_bienvenida(self):
         """Reinicia la bienvenida con detección completa desde cero."""
+        if not self.logger.sesion_activa:
+            self.logger.registrar_inicio_sesion()
+            
         dest = self.dir_videos / "bienvenida.mp4"
 
         print("[SISTEMA] Mostrando pantalla de bienvenida...")
@@ -898,3 +946,16 @@ class GestorAplicacion(QObject):
             print(f"[Telegram] Reporte #{self.notificacion_counter} enviado correctamente.")
         except Exception as e:
             print(f"[Telegram] Error al enviar reporte: {e}")
+            
+    def generar_reporte(self):
+        print("\n" + self.logger.obtener_reporte_completo())
+        archivo = self.logger.exportar_reporte_txt()
+        if archivo:
+            print(f"Reporte guardado en {archivo}")
+            
+    def imprimir_metricas_actuales(self):
+        """Imprime métricas actuales sin cerrar la app"""
+        print("\n" + "="*70)
+        print("MÉTRICAS ACTUALES (sesión en curso)")
+        print("="*70)
+        print(self.logger.obtener_reporte_completo())
