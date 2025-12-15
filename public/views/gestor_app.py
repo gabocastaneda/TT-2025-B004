@@ -171,7 +171,7 @@ RESP_UNICA       = {"resp2","resp4","resp6","resp8","resp13","resp14","resp15","
 RESP_TEXTO = {
     "resp1":  "Resp1- Contamos con cinco ramas de atención, captura la palabra que corresponda a tu solicitud:\n\tFacturacion / Aclaracion / Devolucion / Dudas / Ninguna",
     "resp2":  "Resp2- Lamentamos no poder ayudarte, continuaremos trabajando para proporcionarte un mejor servicio",
-    "resp3":  "Resp3- ¿Hay algo más en lo que te pueda ayudar? Por favor captura Si o No",
+    "resp3":  "Resp3- ¿Hay algo más en lo que te pueda ayudar?  ",
     "resp4":  "Resp4- Gracias por utilizar nuestro sistema",
     "resp5":  "Resp5- Por favor, ayúdanos contestando una encuesta de satisfacción",
     "resp6":  "Resp6- Lo lamentamos pero para poder darle el apoyo debe contar con su ticket para poder escanearlo",
@@ -181,10 +181,10 @@ RESP_TEXTO = {
     "resp10": "Resp10- Con ayuda del escaner, escane el código de barras que se encuentra en su ticket",
     "resp11": "Resp11- Captura la palabra (producto) para confirmar que desea hacer una devolución, de lo contrario capture la palabra (ninguno)",
     "resp12": "Resp12- Especifique el motivo de devolución del producto. Capture la opción que corresponda al motivo de su devolución (dañado / defecto / equivocación) en caso de que no aplique ninguna opción, capture (ninguno)",
-    "resp13": "Resp13- ¡Hola! Somos un sistema de apoyo a la atención al cliente de personas sordas-señantes",
+    "resp13": "Resp13- ¡Hola! Somos un sistema de apoyo de atención al cliente de personas sordas-señantes",
     "resp14": "Resp14- Para poder interectarua con el sistema deberás capturar únicamente las palabras indicadas en los siguientes videos.",
     "resp15": "Resp15- Sin tocar la pantalla mueva su dedo índice para que el cursor se coloque y mantenga durante 3 segundos sobre la calificación que desee otorgar al Sistema. ",
-    "resp16": "Resp16- Sin tocar la pantalla, mueva su dedo índice para que el cursor se coloque sobre el producto que le gustaría cambiar y mantenga durante 3 segundos. Mueva su mano izquierda hacia arriba o hacia abajo para visualizar más productos.\n Para detener el scroll de productos, cierre el puño de su mano izquierda, para reanudarlo vuelva a extender la mano."
+    "resp16": "Resp16- Sin tocar la pantalla, mueva su dedo índice para que el cursor se coloque durante 3 segundos sobre el botón de mostrár productos, Despues mueva el cursor sobre el producto que le gustaría devolver y mantenga durante 3 segundos. Mueva su mano izquierda hacia arriba o hacia abajo para visualizar más productos.\n Para detener el scroll de productos, cierre el puño de su mano izquierda, para reanudarlo vuelva a extender la mano."
 }
 
 def _norm(s: str) -> str: return s.strip().lower()
