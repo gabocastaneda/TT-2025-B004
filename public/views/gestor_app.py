@@ -636,6 +636,7 @@ class GestorAplicacion(QObject):
         elif self.state == ST.DEV_REASON:
             if v in {"danado","dañado","defecto","equivocacion","equivocación"}:
                 self._reset_error_count(); self.context["razon"] = v
+                self.logger.registrar_razon_devolucion(v)
                 self._enqueue_and_play(["resp9"], ST.ASK_TICKET_YN)
             else: self._handle_input_error()
 
