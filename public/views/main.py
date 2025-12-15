@@ -3,7 +3,6 @@
 # public/views/main.py
 import sys
 from pathlib import Path
-import time
 
 # Asegura que el PADRE de "public" esté en sys.path para que funcione "import public.*"
 _THIS = Path(__file__).resolve()
