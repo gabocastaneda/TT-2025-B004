@@ -1,0 +1,41 @@
+{
+  "total_usos": 1,
+  "ramas": {
+    "devolucion": 0,
+    "facturacion": 0,
+    "aclaracion": 0,
+    "dudas": 0,
+    "otros": 0
+  },
+  "razones_devolucion": {
+    "danado": 0,
+    "defecto": 0,
+    "equivocacion": 0,
+    "ninguno": 0
+  },
+  "calificaciones": {
+    "1_estrella": 0,
+    "2_estrellas": 0,
+    "3_estrellas": 0,
+    "4_estrellas": 0,
+    "5_estrellas": 0,
+    "promedio": 0.0
+  },
+  "errores_captura": {
+    "MAIN": 0,
+    "DEV_MENU": 0,
+    "DEV_REASON": 0,
+    "ASK_TICKET_YN": 0,
+    "WAIT_TICKET": 0,
+    "WAIT_PRODUCT": 0,
+    "MORE_PRODUCT": 0,
+    "RESP3_MAIN": 0,
+    "RESP3_NINGUNO": 0,
+    "RESP3_NO_TICKET": 0,
+    "SURVEY": 0
+  },
+  "sin_solucion": 0,
+  "alertas_usabilidad": 0,
+  "inactividad_timeout": 0,
+  "ultima_actualizacion": "2025-12-10T20:00:02.176112"
+}

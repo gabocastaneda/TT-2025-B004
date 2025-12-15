@@ -121,51 +121,22 @@ class LoggerMetricas:
     def registrar_rama(self, rama: str):
         """Registra qué rama seleccionó el usuario"""
         rama_norm = rama.lower()
-        
-        # Mapear variaciones a keys estándar
-        mapeo = {
-            "devolución": "devolucion",
-            "devolucion": "devolucion",
-            "facturación": "facturacion",
-            "facturacion": "facturacion",
-            "aclaración": "aclaracion",
-            "aclaracion": "aclaracion",
-            "dudas": "dudas",
-            "otros": "otros"
-        }
-        
-        rama_key = mapeo.get(rama_norm, rama_norm)
-        
         with self.lock:
-            if rama_key in self.metricas["ramas"]:
-                self.metricas["ramas"][rama_key] += 1
+            if rama_norm in self.metricas["ramas"]:
+                self.metricas["ramas"][rama_norm] += 1
             else:
-                self.metricas["ramas"][rama_key] = 1
+                self.metricas["ramas"][rama_norm] = 1
         self._guardar_metricas()
         self._log_evento(f"RAMA SELECCIONADA: {rama}")
     
     def registrar_razon_devolucion(self, razon: str):
         """Registra la razón de devolución"""
-        # Normalizar acentos para consistencia
         razon_norm = razon.lower()
-        
-        # Mapear variaciones a keys estándar
-        mapeo = {
-            "dañado": "danado",
-            "danado": "danado",
-            "defecto": "defecto",
-            "equivocación": "equivocacion",
-            "equivocacion": "equivocacion",
-            "ninguno": "ninguno"
-        }
-        
-        razon_key = mapeo.get(razon_norm, razon_norm)
-        
         with self.lock:
-            if razon_key in self.metricas["razones_devolucion"]:
-                self.metricas["razones_devolucion"][razon_key] += 1
+            if razon_norm in self.metricas["razones_devolucion"]:
+                self.metricas["razones_devolucion"][razon_norm] += 1
             else:
-                self.metricas["razones_devolucion"][razon_key] = 1
+                self.metricas["razones_devolucion"][razon_norm] = 1
         self._guardar_metricas()
         self._log_evento(f"RAZÓN DEVOLUCIÓN: {razon}")
     
@@ -335,11 +306,11 @@ class LoggerMetricas:
                 contenido = f.read()
             with open(respaldo, 'w', encoding='utf-8') as f:
                 f.write(contenido)
-            print(f"Respaldo creado: {respaldo}")
+            print(f"✅ Respaldo creado: {respaldo}")
         except:
             pass
         
         self.metricas = self._estructura_metricas_vacia()
         self._guardar_metricas()
-        self._log_evento("MÉTRICAS RESETEADAS")
-        print("Métricas reseteadas")
+        self._log_evento("🔄 MÉTRICAS RESETEADAS")
+        print("✅ Métricas reseteadas")
