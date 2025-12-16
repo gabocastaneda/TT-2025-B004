@@ -443,7 +443,8 @@ class GestorAplicacion(QObject):
         resumen_texto = self._generar_texto_resumen_string()
         msg_telegram = (f"🚨 APOYO EN CAPTURA DE SISTEMA 🚨\n📦 SEGUIMIENTO: #{self.notificacion_counter:04d}\n"
                         f"📍 DETENIDO EN: {paso_detenido}\n⚠️ El usuario ha fallado 3 veces consecutivas en este paso.\n"
-                        f"--- RESUMEN HASTA EL MOMENTO ---\n{resumen_texto}")
+                        f"--- RESUMEN HASTA EL MOMENTO ---\n{resumen_texto}"
+                        f"!Alerta! Hay un problema con la captura del usuario, favor de acudir a apoyarlo. En caso de no poder brindar una correcta atención, comuniquese a 1-800-925-6278 (1-800-WALMART) para solicitar apoyo")
         self._enviar_telegram(msg_telegram)
         
         if isinstance(self.ventana_actual, VentanaInteraccion):
