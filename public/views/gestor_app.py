@@ -15,9 +15,6 @@ from public.views.formatos.interaccion import VentanaInteraccion
 from public.views.formatos.ventana_ticket_camara import VentanaTicketCamara
 from public.views.formatos.ventana_encuesta import VentanaEncuesta
 
-# impoortacion del logger
-from public.views.logger_metricas import LoggerMetricas
-
 TG_TOKEN = "8567289049:AAF1lFThXzqpu2ptbHUcAkS3-b6CKEUmaEI"
 TG_CHAT_ID = "1794777471"
 
@@ -165,13 +162,13 @@ def render_ticket_html(bundle: dict) -> str:
 # ==============================================================================
 # CONSTANTES Y FLUJO DE ESTADOS
 # ==============================================================================
-RESP_INTERACCION = {"resp1","resp3","resp5","resp7","resp9","resp10","resp11","resp12"}
-RESP_UNICA       = {"resp2","resp4","resp6","resp8","resp13","resp14","resp15","resp16"}
+RESP_INTERACCION = {"resp1","resp3","resp7","resp9","resp10","resp11","resp12"}
+RESP_UNICA       = {"resp2","resp4","resp5","resp6","resp8","resp13","resp14","resp15","resp16"}
 
 RESP_TEXTO = {
     "resp1":  "Resp1- Contamos con cinco ramas de atención, captura la palabra que corresponda a tu solicitud:\n\tFacturacion / Aclaracion / Devolucion / Dudas / Ninguna",
     "resp2":  "Resp2- Lamentamos no poder ayudarte, continuaremos trabajando para proporcionarte un mejor servicio",
-    "resp3":  "Resp3- ¿Hay algo más en lo que te pueda ayudar?  ",
+    "resp3":  "Resp3- ¿Hay algo más en lo que te pueda ayudar? Por favor captura Si o No",
     "resp4":  "Resp4- Gracias por utilizar nuestro sistema",
     "resp5":  "Resp5- Por favor, ayúdanos contestando una encuesta de satisfacción",
     "resp6":  "Resp6- Lo lamentamos pero para poder darle el apoyo debe contar con su ticket para poder escanearlo",
@@ -181,20 +178,26 @@ RESP_TEXTO = {
     "resp10": "Resp10- Con ayuda del escaner, escane el código de barras que se encuentra en su ticket",
     "resp11": "Resp11- Captura la palabra (producto) para confirmar que desea hacer una devolución, de lo contrario capture la palabra (ninguno)",
     "resp12": "Resp12- Especifique el motivo de devolución del producto. Capture la opción que corresponda al motivo de su devolución (dañado / defecto / equivocación) en caso de que no aplique ninguna opción, capture (ninguno)",
-    "resp13": "Resp13- ¡Hola! Somos un sistema de apoyo de atención al cliente de personas sordas-señantes",
+    "resp13": "Resp13- ¡Hola! Somos un sistema de apoyo a la atención al cliente de personas sordas-señantes",
     "resp14": "Resp14- Para poder interectarua con el sistema deberás capturar únicamente las palabras indicadas en los siguientes videos.",
     "resp15": "Resp15- Sin tocar la pantalla mueva su dedo índice para que el cursor se coloque y mantenga durante 3 segundos sobre la calificación que desee otorgar al Sistema. ",
-    "resp16": "Resp16- Sin tocar la pantalla, mueva su dedo índice para que el cursor se coloque durante 3 segundos sobre el botón de mostrár productos, Despues mueva el cursor sobre el producto que le gustaría devolver y mantenga durante 3 segundos. Mueva su mano izquierda hacia arriba o hacia abajo para visualizar más productos.\n Para detener el scroll de productos, cierre el puño de su mano izquierda, para reanudarlo vuelva a extender la mano."
+    "resp16": "Resp16- Sin tocar la pantalla, mueva su dedo índice para que el cursor se coloque sobre el producto que le gustaría cambiar y mantenga durante 3 segundos. Mueva su mano izquierda hacia arriba o hacia abajo para visualizar más productos.\n Para detener el scroll de productos, cierre el puño de su mano izquierda, para reanudarlo vuelva a extender la mano."
 }
 
 def _norm(s: str) -> str: return s.strip().lower()
-def _yes(s: str) -> bool: return _norm(s) in {"si","sí","yes","y","s"}
-def _no(s: str) -> bool: return _norm(s) in {"no","n"}
+def _yes(s: str) -> bool: 
+    result = _norm(s) in {"si","sí","yes","y","s"}
+    print(f"[DEBUG] _yes('{s}') = {result}")
+    return result
+def _no(s: str) -> bool: 
+    result = _norm(s) in {"no","n"}
+    print(f"[DEBUG] _no('{s}') = {result}")
+    return result
 
 class ST:
     MAIN="MAIN"; DEV_MENU="DEV_MENU"; DEV_REASON="DEV_REASON"; ASK_TICKET_YN="ASK_TICKET_YN"
     WAIT_TICKET="WAIT_TICKET"; WAIT_PRODUCT="WAIT_PRODUCT"; MORE_PRODUCT="MORE_PRODUCT"
-    RESP3_MAIN="RESP3_MAIN"; RESP3_NINGUNO="RESP3_NINGUNO"; RESP3_NO_TICKET="RESP3_NO_TICKET"; SURVEY="SURVEY"
+    RESP3_MAIN="RESP3_MAIN"; RESP3_NINGUNO="RESP3_NINGUNO"; RESP3_NO_TICKET="RESP3_NO_TICKET"; SURVEY="SURVEY"; MAIN_RETURN = "MAIN_RETURN"
 
 class HiloEntrada(QThread):
     senal_txt = pyqtSignal(str)
@@ -222,6 +225,7 @@ class GestorAplicacion(QObject):
         super().__init__()
         self.app = app
         self.ventana_actual = None
+        self.ventana_interaccion = None  # Guardar referencia específica a VentanaInteraccion
         self.playing = False
         self.modo_gestos_activo = False
         self.dir_public = Path(__file__).resolve().parents[1]
@@ -247,41 +251,11 @@ class GestorAplicacion(QObject):
         self.timer_inactividad_gestos.timeout.connect(self._on_inactividad_gestos)
         self.timer_inactividad_gestos.setInterval(10000)  # 10 segundos
 
-        # Agregamos el logger
-        self.logger = LoggerMetricas(Path(__file__).resolve().parents[1])
-
         self.hilo = HiloEntrada()
         self.hilo.senal_txt.connect(lambda s: QTimer.singleShot(0, lambda: self._on_txt_ui_guarded(s)))
         self.hilo.senal_salir.connect(self.app.quit)
         self.hilo.start()
         self.app.aboutToQuit.connect(self._on_quit)
-        
-        self.app.aboutToQuit.connect(self._on_app_quit)
-        
-    def _on_app_quit(self):
-        """Se ejecuta cuando la aplicación está a punto de cerrarse"""
-        print("\n" + "="*70)
-        print("CERRANDO APLICACIÓN - GENERANDO REPORTE FINAL")
-        print("="*70)
-        
-        # Registrar cierre en logger
-        self.logger.registrar_cierre_aplicacion()
-        
-        # Mostrar reporte en consola
-        print(self.logger.obtener_reporte_completo())
-        
-        # Detener timer de inactividad
-        if hasattr(self, 'timer_inactividad_gestos'):
-            self.timer_inactividad_gestos.stop()
-        
-        # Detener hilo de entrada
-        try:
-            self.hilo.detener()
-        except:
-            pass
-        
-        print("\nLogs guardados exitosamente")
-        print(f"Ubicación: {self.logger.base_path}")
         
     def eventFilter(self, obj, event):
         if event.type() == QEvent.KeyPress and self.captura_activa:
@@ -362,21 +336,35 @@ class GestorAplicacion(QObject):
     def _activar_modo_gestos(self, activar: bool = True):
         """Activa/desactiva modo gestos y su timer de inactividad"""
         
+        print(f"[GESTOS] Solicitado activar={activar}, modo_actual={self.modo_gestos_activo}")
+        
         # NO activar gestos si no estamos en VentanaInteraccion
         if activar and not isinstance(self.ventana_actual, VentanaInteraccion):
-            print(f"[DEBUG] No activar gestos: ventana actual es {type(self.ventana_actual).__name__}")
+            print(f"[GESTOS] ⚠️ No activar - ventana actual: {type(self.ventana_actual).__name__}")
+            self.modo_gestos_activo = False
+            return
+        
+        # Si ya está en el estado deseado, no hacer nada
+        if activar == self.modo_gestos_activo:
+            print(f"[GESTOS] ⚠️ Ya está en estado {activar} - ignorando")
             return
         
         self.modo_gestos_activo = activar
         
         if activar:
-            print(f"[TIMER] Timer de inactividad INICIADO (ventana: {type(self.ventana_actual).__name__})")
+            # Detener timer anterior si existe
+            if self.timer_inactividad_gestos.isActive():
+                self.timer_inactividad_gestos.stop()
+            
+            # Iniciar timer
             self.timer_inactividad_gestos.start()
+            print(f"[TIMER] ✅ Timer iniciado (ventana: {type(self.ventana_actual).__name__})")
         else:
             if self.timer_inactividad_gestos.isActive():
-                print("[TIMER] Timer de inactividad DETENIDO")
                 self.timer_inactividad_gestos.stop()
+                print("[TIMER] ⛔ Timer detenido")
         
+        # Configurar ventana
         if isinstance(self.ventana_actual, VentanaInteraccion):
             self.ventana_actual.set_modo_gestos(activar)
             if activar:
@@ -400,8 +388,6 @@ class GestorAplicacion(QObject):
     def _on_inactividad_gestos(self):
         """Se ejecuta cuando pasan 10 segundos sin detectar gestos"""
         print("[GESTOR] ⚠️ INACTIVIDAD DETECTADA - 10 segundos sin gestos")
-        # logger
-        self.logger.registrar_timeout_inactividad()
         print("[GESTOR] Volviendo a pantalla de bienvenida...")
         
         self.timer_inactividad_gestos.stop()
@@ -417,6 +403,9 @@ class GestorAplicacion(QObject):
             "survey": None
         }
         
+        # Limpiar referencia a ventana de interacción
+        self.ventana_interaccion = None
+        
         # Volver a bienvenida
         self.mostrar_bienvenida()
 
@@ -425,8 +414,6 @@ class GestorAplicacion(QObject):
 
     def _handle_input_error(self):
         self.consecutive_errors += 1
-        # logger
-        self.logger.registrar_error_captura(self.state, "entrada invalidad")
         print(f"[DEBUG] Error input #{self.consecutive_errors}")
         if self.consecutive_errors >= 3: self._trigger_usability_alert()
         else: self._mostrar_error_entrada(); self._print_prompt()
@@ -452,8 +439,6 @@ class GestorAplicacion(QObject):
     def _trigger_usability_alert(self):
         print("\n!!! ALERTA DE USABILIDAD - 3 ERRORES CONSECUTIVOS !!!")
         self.notificacion_counter += 1
-        # logger
-        self.logger.registrar_alerta_usabilidad(self.state, self.consecutive_errors)
         paso_detenido = self._get_descripcion_estado_actual()
         resumen_texto = self._generar_texto_resumen_string()
         msg_telegram = (f"🚨 APOYO EN CAPTURA DE SISTEMA 🚨\n📦 SEGUIMIENTO: #{self.notificacion_counter:04d}\n"
@@ -475,6 +460,7 @@ class GestorAplicacion(QObject):
         print("[SISTEMA] Reiniciando aplicación por alerta de usabilidad...")
         self.consecutive_errors = 0
         self.context = {"branch": None, "razon": None, "ticket_num": None, "ticket_bundle": None, "productos": [], "survey": None}
+        self.ventana_interaccion = None  # Limpiar referencia
         self.mostrar_bienvenida()
 
     def _hook_interaccion(self, win: VentanaInteraccion):
@@ -490,33 +476,91 @@ class GestorAplicacion(QObject):
         self._activar_modo_gestos(False)
 
     def _play_resp(self, resp_name: str):
+        print(f"[PLAY] Reproduciendo {resp_name}, estado actual: {self.state}")
         self._bloquear(True)
         if resp_name in RESP_TEXTO: print("\n" + RESP_TEXTO[resp_name] + "\n")
 
         if resp_name in RESP_INTERACCION:
             src = self.mapa.get(resp_name)
-            if not isinstance(self.ventana_actual, VentanaInteraccion):
-                win = VentanaInteraccion(src)
-                win.set_modo_reproduccion(True)
-                self._safe_disconnect_all(win)
-                self._hook_interaccion(win)
-                self._swap(win)
-            else:
-                self._safe_disconnect_all(self.ventana_actual)
-                self._hook_interaccion(self.ventana_actual)
-                self.ventana_actual.set_modo_reproduccion(True)
-                self.ventana_actual.cambiar_video_unidad(src, nombre_resp=resp_name)
+            print(f"[PLAY] Buscando video para {resp_name}: {src}")
+            
+            # PRIMERO intentar usar ventana de interacción existente
+            if self.ventana_interaccion and isinstance(self.ventana_interaccion, VentanaInteraccion):
+                print(f"[PLAY] ✅ Usando VentanaInteraccion guardada")
+                try:
+                    # Asegurar que la ventana esté visible
+                    if self.ventana_interaccion.isHidden():
+                        print(f"[PLAY] VentanaInteraccion estaba oculta, mostrándola...")
+                        self.ventana_interaccion.show()
+                    
+                    self._safe_disconnect_all(self.ventana_interaccion)
+                    self._hook_interaccion(self.ventana_interaccion)
+                    self.ventana_interaccion.set_modo_reproduccion(True)
+                    self.ventana_interaccion.cambiar_video_unidad(src, nombre_resp=resp_name)
+                    self._swap(self.ventana_interaccion)  # Mostrar la ventana guardada
+                    print(f"[PLAY] ✅ Video configurado en ventana existente")
+                    return
+                except Exception as e:
+                    print(f"[PLAY] ❌ Error usando ventana guardada: {e}")
+                    traceback.print_exc()
+            
+            # Si no hay ventana guardada o falló, crear una nueva
+            print(f"[PLAY] Creando nueva VentanaInteraccion para {resp_name}")
+            win = VentanaInteraccion(src)
+            win.set_modo_reproduccion(True)
+            self._safe_disconnect_all(win)
+            self._hook_interaccion(win)
+            self._swap(win)
         else:
+            print(f"[PLAY] Creando VentanaReproductorVideo para {resp_name}")
             ruta = self._ensure_local_resp(resp_name)
             win = VentanaReproductorVideo(ruta if ruta else None)
             self._safe_disconnect_all(win)
             self._hook_unica(win)
             self._swap(win)
+            
+    def pausar_camara(self):
+        """Pausa la cámara para ahorrar recursos cuando la ventana está oculta"""
+        print(f"[CAMARA] Pausando cámara...")
+        try:
+            if self.timer_cam.isActive():
+                self.timer_cam.stop()
+                print(f"[CAMARA] Timer de cámara detenido")
+            
+            # También pausar la inferencia de gestos
+            if self.inferencia:
+                try:
+                    self.inferencia.detener_deteccion()
+                    print(f"[CAMARA] Inferencia de gestos pausada")
+                except:
+                    pass
+        except Exception as e:
+            print(f"[CAMARA] Error pausando cámara: {e}")
+
+    def reanudar_camara(self):
+        """Reanuda la cámara cuando la ventana se vuelve visible"""
+        print(f"[CAMARA] Reanudando cámara...")
+        try:
+            if not self.timer_cam.isActive():
+                self.timer_cam.start(30)
+                print(f"[CAMARA] Timer de cámara reiniciado")
+            
+            # Reanudar la inferencia de gestos
+            if self.inferencia:
+                try:
+                    self.inferencia.reanudar_deteccion()
+                    print(f"[CAMARA] Inferencia de gestos reanudada")
+                except:
+                    pass
+        except Exception as e:
+            print(f"[CAMARA] Error reanudando cámara: {e}")
 
     def _enqueue_and_play(self, resp_list: List[str], next_state: str):
+        print(f"[DEBUG] Encolando videos: {resp_list} -> estado siguiente: {next_state}")
         self.queue = list(resp_list)
         self.next_state_after_queue = next_state
         self.processing_video_end = False
+        print(f"[DEBUG] Cola: {self.queue}, Estado siguiente: {self.next_state_after_queue}")
         if next_state == ST.WAIT_TICKET: self.hilo.set_habilitado(True)
         self._play_next_in_queue()
 
@@ -530,50 +574,176 @@ class GestorAplicacion(QObject):
         self._play_resp(self.queue.pop(0))
 
     def _on_video_finished(self):
+        """Se ejecuta cuando termina un video"""
+        
+        print(f"[VIDEO FINISHED] Estado actual: {self.state}, Procesando finalización...")
+        
+        # Si la ventana actual es VentanaReproductorVideo y el siguiente es RESP_INTERACCION
+        # Necesitamos cambiar a VentanaInteraccion
+        if isinstance(self.ventana_actual, VentanaReproductorVideo) and self.queue:
+            next_resp = self.queue[0] if self.queue else None
+            if next_resp in RESP_INTERACCION and self.ventana_interaccion:
+                print(f"[VIDEO FINISHED] Cambiando a VentanaInteraccion para {next_resp}")
+                # Mostrar la ventana de interacción guardada
+                self.ventana_interaccion.show()
+                self.ventana_actual = self.ventana_interaccion
+        
+        # Configurar ventana si es VentanaInteraccion
         if isinstance(self.ventana_actual, VentanaInteraccion):
             try:
+                print(f"[VIDEO FINISHED] Configurando VentanaInteraccion...")
                 self.ventana_actual.set_modo_reproduccion(False)
                 self.ventana_actual.desbloquear_terminal()
-                self._activar_modo_gestos(True)
-            except Exception: pass
+            except Exception as e:
+                print(f"[ERROR] Configurando ventana: {e}")
 
-        if self.processing_video_end: return
+        # Evitar reentrada
+        if self.processing_video_end:
+            print(f"[VIDEO FINISHED] Ya se está procesando finalización, ignorando...")
+            return
+        
         self.processing_video_end = True
+        print(f"[VIDEO FINISHED] Marcado processing_video_end=True")
 
+        # Si hay más videos en cola, reproducir siguiente
         if self.queue:
+            print(f"[VIDEO FINISHED] Hay más videos en cola ({len(self.queue)}), reproduciendo siguiente...")
             self.processing_video_end = False
             self._play_next_in_queue()
             return
 
+        print(f"[VIDEO FINISHED] No hay más videos en cola, configurando estado final...")
+        print(f"[VIDEO FINISHED] next_state_after_queue: {self.next_state_after_queue}")
+        
+        # ✅ Cola terminada - configurar estado final
         self._bloquear(False)
+        
+        # ✅ IMPORTANTE: DESACTIVAR TEMPORALMENTE GESTOS
+        self._activar_modo_gestos(False)
+        
+        # Cambiar estado
         if self.next_state_after_queue:
+            print(f"[VIDEO FINISHED] Cambiando a estado: {self.next_state_after_queue}")
             self._set_state(self.next_state_after_queue)
             self.next_state_after_queue = None
         else:
+            print(f"[VIDEO FINISHED] No hay estado siguiente, mostrando prompt...")
             self._print_prompt()
+        
+        # Activar gestos después de un breve retraso SOLO si estamos en un estado que los requiere
+        if self.state in {ST.RESP3_MAIN, ST.RESP3_NINGUNO, ST.RESP3_NO_TICKET, 
+                          ST.MORE_PRODUCT, ST.DEV_MENU, ST.DEV_REASON, 
+                          ST.ASK_TICKET_YN, ST.MAIN}:
+            print(f"[VIDEO FINISHED] Programando activación de gestos para estado: {self.state}")
+            QTimer.singleShot(2000, self._activar_gestos_seguro)
+        else:
+            print(f"[VIDEO FINISHED] No activar gestos para estado: {self.state}")
+        
         self.processing_video_end = False
+        print(f"[VIDEO FINISHED] Procesamiento de video finalizado correctamente")
+
+    def _activar_gestos_seguro(self):
+        """Activa gestos de manera segura, verificando condiciones"""
+        print(f"[GESTOS SEGURO] Intentando activar gestos para estado: {self.state}")
+        
+        # Verificar que todavía estamos en el mismo estado
+        if self.state not in {ST.RESP3_MAIN, ST.RESP3_NINGUNO, ST.RESP3_NO_TICKET, 
+                             ST.MORE_PRODUCT, ST.DEV_MENU, ST.DEV_REASON, 
+                             ST.ASK_TICKET_YN, ST.MAIN}:
+            print(f"[GESTOS SEGURO] ⚠️ Estado cambiado a {self.state}, no activar gestos")
+            return
+        
+        # Verificar que tenemos una VentanaInteraccion activa
+        if not isinstance(self.ventana_actual, VentanaInteraccion):
+            print(f"[GESTOS SEGURO] ⚠️ Ventana actual no es VentanaInteraccion: {type(self.ventana_actual).__name__}")
+            return
+        
+        # Verificar que no estamos reproduciendo
+        if self.playing:
+            print(f"[GESTOS SEGURO] ⚠️ Aún reproduciendo, no activar gestos")
+            return
+        
+        print(f"[GESTOS SEGURO] ✅ Activando gestos...")
+        self._activar_modo_gestos(True)
 
     def _swap(self, nueva):
-        nueva.show()
-        if self.ventana_actual:
-            vieja = self.ventana_actual
-            self.ventana_actual = nueva
-            QTimer.singleShot(100, vieja.close)
-        else: self.ventana_actual = nueva
+        print(f"[SWAP] Cambiando ventana de {type(self.ventana_actual).__name__ if self.ventana_actual else 'None'} a {type(nueva).__name__}")
         
+        # Guardar referencia si es VentanaInteraccion
         if isinstance(nueva, VentanaInteraccion):
-            if self.playing: self._activar_modo_gestos(False)
-            else: self._activar_modo_gestos(True)
-        else: self._activar_modo_gestos(False)
+            self.ventana_interaccion = nueva
+            print(f"[SWAP] Guardada referencia a VentanaInteraccion")
+        
+        # Si la ventana actual es VentanaInteraccion pero vamos a cambiar a otra ventana
+        # NO cerrarla completamente, solo ocultarla
+        if isinstance(self.ventana_actual, VentanaInteraccion) and self.ventana_actual != nueva:
+            print(f"[SWAP] Ocultando VentanaInteraccion (manteniendo recursos)")
+            self.ventana_actual.hide()  # Solo ocultar, no cerrar
+            # Desactivar temporalmente la cámara para ahorrar recursos
+            try:
+                self.ventana_actual.pausar_camara()
+            except:
+                pass
+        
+        # Desactivar gestos antes de cambiar
+        self._activar_modo_gestos(False)
+        
+        nueva.show()
+        self.ventana_actual = nueva
+        
+        # Si la nueva ventana es VentanaInteraccion y estaba oculta, reanudar cámara
+        if isinstance(nueva, VentanaInteraccion) and nueva.isHidden():
+            print(f"[SWAP] Reanudando VentanaInteraccion oculta")
+            try:
+                nueva.reanudar_camara()
+            except:
+                pass
+        
+        print(f"[SWAP] Ventana cambiada exitosamente")
 
     def _set_state(self, st: str):
+        """Cambia el estado del sistema y configura la ventana apropiada"""
+        print(f"[ESTADO] Cambiando de {self.state} a {st}")
+        old_state = self.state
         self.state = st
-        if self.state == ST.WAIT_TICKET: self.captura_activa = True; self.buffer_teclado = ""; self._activar_modo_gestos(False)
+        
+        # Desactivar gestos inmediatamente al cambiar de estado
+        self._activar_modo_gestos(False)
+        
+        if self.state == ST.WAIT_TICKET:
+            self.captura_activa = True
+            self.buffer_teclado = ""
+            
+        elif self.state in {ST.MORE_PRODUCT, ST.RESP3_MAIN, ST.RESP3_NINGUNO, ST.RESP3_NO_TICKET,
+                           ST.DEV_MENU, ST.DEV_REASON, ST.ASK_TICKET_YN, ST.MAIN}:
+            self.captura_activa = False
+            self.buffer_teclado = ""
+            
+            # Programar activación de gestos después de un breve retraso
+            QTimer.singleShot(1500, self._activar_gestos_despues_de_cambio_estado)
+            
         elif self.state == ST.SURVEY:
             self._lanzar_ventana_encuesta()
             return
-        else: self.captura_activa = False; self.buffer_teclado = ""
+        
+        else:
+            self.captura_activa = False
+            self.buffer_teclado = ""
+            
         self._print_prompt()
+
+    def _activar_gestos_despues_de_cambio_estado(self):
+        """Activa gestos después de cambiar de estado, asegurando que la ventana esté lista"""
+        print(f"[GESTOS] Verificando activación para estado: {self.state}")
+        
+        if self.state in {ST.MORE_PRODUCT, ST.RESP3_MAIN, ST.RESP3_NINGUNO, ST.RESP3_NO_TICKET,
+                         ST.DEV_MENU, ST.DEV_REASON, ST.ASK_TICKET_YN, ST.MAIN}:
+            
+            if isinstance(self.ventana_actual, VentanaInteraccion):
+                print(f"[GESTOS] ✅ Activando gestos para estado: {self.state}")
+                self._activar_modo_gestos(True)
+            else:
+                print(f"[GESTOS] ⚠️ No activar gestos - ventana incorrecta: {type(self.ventana_actual).__name__}")
 
     def _print_prompt(self):
         prompts = {
@@ -592,15 +762,27 @@ class GestorAplicacion(QObject):
         print(msg)
 
     def _on_txt_ui_guarded(self, s: str):
-        try: self._on_txt_ui(s)
+        print(f"[ENTRADA] Recibido: '{s}' en estado: {self.state}")
+        
+        # Verificar que no estemos en medio de un cambio de estado
+        if self.processing_video_end or self.playing:
+            print(f"[ENTRADA] Ignorando porque processing_video_end={self.processing_video_end}, playing={self.playing}")
+            return
+            
+        try: 
+            self._on_txt_ui(s)
         except Exception:
             traceback.print_exc()
             self._bloquear(False)
             self._print_prompt()
 
     def _on_txt_ui(self, s: str):
-        if self.playing: return
+        if self.playing: 
+            print(f"[ENTRADA] Ignorando entrada porque playing=True")
+            return
+        
         v = _norm(s)
+        print(f"[ENTRADA] Procesando: '{s}' (normalizado: '{v}')")
 
         if v.isdigit():
             val = int(v)
@@ -612,7 +794,8 @@ class GestorAplicacion(QObject):
                 return
             
         if self.state in {ST.WAIT_TICKET, ST.WAIT_PRODUCT}:
-            if isinstance(self.ventana_actual, VentanaInteraccion): self.ventana_actual.mostrar_error_captura()
+            if isinstance(self.ventana_actual, VentanaInteraccion): 
+                self.ventana_actual.mostrar_error_captura()
             self._handle_input_error(); return
 
         if self.state == ST.MAIN:
@@ -621,27 +804,32 @@ class GestorAplicacion(QObject):
                 self.context = {k:None for k in self.context}
                 self.context["productos"] = []
                 self.context["branch"] = "devolucion"
-                self.logger.registrar_rama("devolucion") # logger
                 self._enqueue_and_play(["resp11"], ST.DEV_MENU)
             else: self._handle_input_error()
 
         elif self.state == ST.DEV_MENU:
             if v == "producto":
-                self._reset_error_count(); self._enqueue_and_play(["resp12"], ST.DEV_REASON)
+                self._reset_error_count()
+                self._enqueue_and_play(["resp12"], ST.DEV_REASON)
             elif v == "ninguno":
-                # se añadió el logger
-                self._reset_error_count(); self.logger.registrar_sin_solucion(); self._enqueue_and_play(["resp2","resp3"], ST.RESP3_NINGUNO)
+                self._reset_error_count()
+                self._enqueue_and_play(["resp2","resp3"], ST.RESP3_NINGUNO)
             else: self._handle_input_error()
 
         elif self.state == ST.DEV_REASON:
             if v in {"danado","dañado","defecto","equivocacion","equivocación"}:
-                self._reset_error_count(); self.context["razon"] = v
+                self._reset_error_count()
+                self.context["razon"] = v
                 self._enqueue_and_play(["resp9"], ST.ASK_TICKET_YN)
             else: self._handle_input_error()
 
         elif self.state == ST.ASK_TICKET_YN:
-            if _yes(v): self._reset_error_count(); self._enqueue_and_play(["resp10"], ST.WAIT_TICKET)
-            elif _no(v): self._reset_error_count(); self._enqueue_and_play(["resp6","resp3"], ST.RESP3_NO_TICKET)
+            if _yes(v):
+                self._reset_error_count()
+                self._enqueue_and_play(["resp10"], ST.WAIT_TICKET)
+            elif _no(v):
+                self._reset_error_count()
+                self._enqueue_and_play(["resp6","resp3"], ST.RESP3_NO_TICKET)
             else: self._handle_input_error()
 
         elif self.state == ST.MORE_PRODUCT:
@@ -650,22 +838,55 @@ class GestorAplicacion(QObject):
                 self._lanzar_ventana_ticket()
             elif _no(v):
                 self._reset_error_count()
-                self._enqueue_and_play(["resp4","resp8","resp3"], ST.RESP3_MAIN)
+                # ✅ CORREGIDO: Orden correcto de videos
+                self._enqueue_and_play(["resp8","resp3"], ST.RESP3_MAIN)
             else: self._handle_input_error()
 
-        elif self.state in {ST.RESP3_MAIN, ST.RESP3_NINGUNO}:
-            if _yes(v): self._reset_error_count(); self._enqueue_and_play(["resp1"], ST.MAIN)
+        elif self.state == ST.RESP3_MAIN:
+            print(f"[DEBUG] Procesando respuesta en RESP3_MAIN: '{v}'")
+            if _yes(v):
+                self._reset_error_count()
+                print(f"[DEBUG] Usuario dijo SI, volviendo al menú principal")
+                # Primero mostrar resp1 (menú principal)
+                self._enqueue_and_play(["resp1"], ST.MAIN)
             elif _no(v):
                 self._reset_error_count()
-                self._enqueue_and_play(["resp5", "resp15"], ST.SURVEY)
-            else: self._handle_input_error()
+                print(f"[DEBUG] Usuario dijo NO, yendo a encuesta")
+                # Ir a encuesta de satisfacción
+                self._enqueue_and_play(["resp4", "resp5", "resp16"], ST.SURVEY)
+            else:
+                print(f"[DEBUG] Entrada no válida en RESP3_MAIN: '{v}'")
+                self._handle_input_error()
+        
+        elif self.state == ST.RESP3_NINGUNO:
+            print(f"[DEBUG] Procesando respuesta en RESP3_NINGUNO: '{v}'")
+            if _yes(v):
+                self._reset_error_count()
+                print(f"[DEBUG] Usuario dijo SI, volviendo al menú principal")
+                # Volver al menú principal
+                self._enqueue_and_play(["resp1"], ST.MAIN)
+            elif _no(v):
+                self._reset_error_count()
+                print(f"[DEBUG] Usuario dijo NO, yendo a encuesta")
+                # Ir a encuesta de satisfacción
+                self._enqueue_and_play(["resp4", "resp5", "resp16"], ST.SURVEY)
+            else:
+                print(f"[DEBUG] Entrada no válida en RESP3_NINGUNO: '{v}'")
+                self._handle_input_error()
         
         elif self.state == ST.RESP3_NO_TICKET:
-             if _no(v):
+            print(f"[DEBUG] Procesando respuesta en RESP3_NO_TICKET: '{v}'")
+            if _no(v):
                 self._reset_error_count()
-                self._enqueue_and_play(["resp4","resp5", "resp15"], ST.SURVEY)
-             else: self._handle_input_error()
-        else: self._set_state(ST.MAIN)
+                print(f"[DEBUG] Usuario dijo NO, yendo a encuesta")
+                # Ir directamente a encuesta
+                self._enqueue_and_play(["resp4", "resp5", "resp16"], ST.SURVEY)
+            else:
+                print(f"[DEBUG] Entrada no válida en RESP3_NO_TICKET: '{v}'")
+                self._handle_input_error()
+        else:
+            print(f"[ERROR] Estado no manejado: {self.state}")
+            self._set_state(ST.MAIN)
 
     # ==============================================================================
     # INTEGRACIÓN TICKET CAMARA & ENCUESTA
@@ -759,10 +980,10 @@ class GestorAplicacion(QObject):
 
         print("[SISTEMA] Cámara iniciada (gestos desactivados correctamente)")
 
-
     def _handle_product_number(self, prod_id: int):
         print(f"[GESTOR] Producto seleccionado recibido: {prod_id}")
-        if isinstance(self.ventana_actual, VentanaTicketCamara): self.ventana_actual.liberar_recursos()
+        if isinstance(self.ventana_actual, VentanaTicketCamara): 
+            self.ventana_actual.liberar_recursos()
 
         bundle = self.context.get("ticket_bundle")
         if not bundle:
@@ -777,12 +998,120 @@ class GestorAplicacion(QObject):
         if prod_id not in self.context["productos"]: self.context["productos"].append(prod_id)
         
         print("[GESTOR] Transición a siguiente paso (MORE_PRODUCT)...")
-        QTimer.singleShot(200, lambda: self._enqueue_and_play(["resp7"], ST.MORE_PRODUCT))
+        
+        # IMPORTANTE: Asegurar que tenemos una VentanaInteraccion para resp7
+        self._preparar_ventana_interaccion_para_resp7()
+        
+        QTimer.singleShot(500, lambda: self._enqueue_and_play(["resp7"], ST.MORE_PRODUCT))
 
+    def _preparar_ventana_interaccion_para_resp7(self):
+        """Prepara la VentanaInteraccion para mostrar resp7 después de seleccionar producto"""
+        print(f"[PREPARAR] Preparando VentanaInteraccion para resp7...")
+        
+        # Si ya tenemos una VentanaInteraccion, reactivar la cámara
+        if self.ventana_interaccion and isinstance(self.ventana_interaccion, VentanaInteraccion):
+            print(f"[PREPARAR] Reactivando cámara en VentanaInteraccion existente")
+            try:
+                # Forzar reactivación de cámara
+                if hasattr(self.ventana_interaccion, 'reanudar_camara_forzado'):
+                    self.ventana_interaccion.reanudar_camara_forzado()
+                elif hasattr(self.ventana_interaccion, 'reanudar_camara'):
+                    self.ventana_interaccion.reanudar_camara()
+            except Exception as e:
+                print(f"[PREPARAR] Error reactivando cámara: {e}")
+        else:
+            print(f"[PREPARAR] No hay VentanaInteraccion disponible, se creará una nueva")
+
+    def _swap(self, nueva):
+        print(f"[SWAP] Cambiando ventana de {type(self.ventana_actual).__name__ if self.ventana_actual else 'None'} a {type(nueva).__name__}")
+        
+        # Guardar referencia si es VentanaInteraccion
+        if isinstance(nueva, VentanaInteraccion):
+            self.ventana_interaccion = nueva
+            print(f"[SWAP] Guardada referencia a VentanaInteraccion")
+        
+        # Si la ventana actual es VentanaInteraccion pero vamos a cambiar a otra ventana
+        # NO cerrarla completamente, solo ocultarla
+        if isinstance(self.ventana_actual, VentanaInteraccion) and self.ventana_actual != nueva:
+            print(f"[SWAP] Ocultando VentanaInteraccion (manteniendo recursos)")
+            self.ventana_actual.hide()  # Solo ocultar, no cerrar
+        
+        # Desactivar gestos antes de cambiar
+        self._activar_modo_gestos(False)
+        
+        # Si la nueva ventana es VentanaInteraccion, reactivar recursos
+        if isinstance(nueva, VentanaInteraccion):
+            print(f"[SWAP] Mostrando VentanaInteraccion - reactivando recursos")
+            try:
+                # Forzar reactivación de cámara
+                nueva.mostrar()
+                if hasattr(nueva, 'reactivar_camara_completa'):
+                    nueva.reactivar_camara_completa()
+            except Exception as e:
+                print(f"[SWAP] Error reactivando cámara: {e}")
+        
+        nueva.show()
+        self.ventana_actual = nueva
+        
+        print(f"[SWAP] Ventana cambiada exitosamente")
+
+    def _play_resp(self, resp_name: str):
+        print(f"[PLAY] Reproduciendo {resp_name}, estado actual: {self.state}")
+        self._bloquear(True)
+        if resp_name in RESP_TEXTO: print("\n" + RESP_TEXTO[resp_name] + "\n")
+
+        if resp_name in RESP_INTERACCION:
+            src = self.mapa.get(resp_name)
+            print(f"[PLAY] Buscando video para {resp_name}: {src}")
+            
+            # PRIMERO intentar usar ventana de interacción existente
+            if self.ventana_interaccion and isinstance(self.ventana_interaccion, VentanaInteraccion):
+                print(f"[PLAY] ✅ Usando VentanaInteraccion guardada")
+                try:
+                    # Asegurar que la ventana esté visible y reactivada
+                    if self.ventana_interaccion.isHidden():
+                        print(f"[PLAY] VentanaInteraccion estaba oculta, reactivando...")
+                        self.ventana_interaccion.show()
+                        # Reactivar cámara
+                        if hasattr(self.ventana_interaccion, 'reactivar_camara_completa'):
+                            self.ventana_interaccion.reactivar_camara_completa()
+                    
+                    self._safe_disconnect_all(self.ventana_interaccion)
+                    self._hook_interaccion(self.ventana_interaccion)
+                    self.ventana_interaccion.set_modo_reproduccion(True)
+                    self.ventana_interaccion.cambiar_video_unidad(src, nombre_resp=resp_name)
+                    self._swap(self.ventana_interaccion)  # Mostrar la ventana guardada
+                    print(f"[PLAY] ✅ Video configurado en ventana existente")
+                    return
+                except Exception as e:
+                    print(f"[PLAY] ❌ Error usando ventana guardada: {e}")
+                    traceback.print_exc()
+            
+            # Si no hay ventana guardada o falló, crear una nueva
+            print(f"[PLAY] Creando nueva VentanaInteraccion para {resp_name}")
+            win = VentanaInteraccion(src)
+            win.set_modo_reproduccion(True)
+            self._safe_disconnect_all(win)
+            self._hook_interaccion(win)
+            self._swap(win)
+        else:
+            print(f"[PLAY] Creando VentanaReproductorVideo para {resp_name}")
+            ruta = self._ensure_local_resp(resp_name)
+            win = VentanaReproductorVideo(ruta if ruta else None)
+            self._safe_disconnect_all(win)
+            self._hook_unica(win)
+            self._swap(win)
+    
+    
     # --- NUEVOS MÉTODOS PARA ENCUESTA ---
     def _lanzar_ventana_encuesta(self):
         print("[SISTEMA] Lanzando VentanaEncuesta...")
-        if isinstance(self.ventana_actual, VentanaInteraccion):
+        
+        # Desactivar gestos antes de cambiar de ventana
+        self._activar_modo_gestos(False)
+        
+        # Solo cerrar si no es nuestra VentanaInteraccion guardada
+        if self.ventana_actual and self.ventana_actual != self.ventana_interaccion:
             self._safe_disconnect_all(self.ventana_actual)
             self.ventana_actual.close()
         
@@ -790,15 +1119,16 @@ class GestorAplicacion(QObject):
         win.calificacion_seleccionada.connect(self._handle_encuesta_result)
         
         self.ventana_actual = win
-        win.show(); win.iniciar_camara()
+        win.show()
+        win.iniciar_camara()
         self._bloquear(False)
+        
+        print("[SISTEMA] Ventana de encuesta iniciada")
 
     def _handle_encuesta_result(self, val: int):
         print(f"[ENCUESTA] Valor recibido: {val}")
         self._reset_error_count()
         self.context["survey"] = val
-        # logger
-        self.logger.registrar_calificacion(val)
         self._mostrar_resumen_y_finalizar()
 
     # ==============================================================================
@@ -834,7 +1164,6 @@ class GestorAplicacion(QObject):
         return "\n".join(lineas)
 
     def _mostrar_resumen_y_finalizar(self):
-        
         """Después de la encuesta: generar resumen, limpiar contexto y reiniciar TODO el flujo."""
         
         # 1. Generar y enviar resumen
@@ -843,7 +1172,7 @@ class GestorAplicacion(QObject):
         
         lineas = []
         lineas.append("✅ RESUMEN FINAL DE LA INTERACCIÓN")
-        lineas.append(f"📦 SEGUIMIENTO: # DEV{self.notificacion_counter:04d}")
+        lineas.append(f"📦 SEGUIMIENTO: #DEV{self.notificacion_counter:04d}")
         lineas.append("╔" + "═" * 58 + "╗")
         lineas.append(cuerpo_resumen)
         lineas.append("╚" + "═" * 58 + "╝")
@@ -851,8 +1180,6 @@ class GestorAplicacion(QObject):
         mensaje_completo = "\n".join(lineas)
         print("\n" + mensaje_completo + "\n")
         self._enviar_telegram(mensaje_completo)
-        # logger
-        self.logger.registrar_fin_sesion(exito = True)
 
         # 2. Apagar modo gestos + timers
         self._activar_modo_gestos(False)
@@ -878,23 +1205,48 @@ class GestorAplicacion(QObject):
             "survey": None
         }
 
-        # 5. Reiniciar todo el flujo → bienvenida real
-        print("[SISTEMA] Reiniciando ciclo completo después de encuesta...")
-        time.sleep(1.5)
-        self.mostrar_bienvenida()
+        # 5. Limpiar referencia a ventana de interacción
+        self.ventana_interaccion = None
 
+        # 6. Mostrar mensaje de despedida y volver al inicio
+        print("[SISTEMA] Sesión finalizada. Volviendo al inicio...")
+        
+        # Mostrar mensaje de despedida breve
+        time.sleep(1.5)
+        
+        # 7. En lugar de ir directamente a bienvenida, mostrar una transición
+        print("[SISTEMA] Mostrando pantalla de bienvenida...")
+        
+        # Crear ventana de bienvenida
+        dest = self.dir_videos / "resp13.mp4"
+        
+        # Forzar bloqueo (video reproducción) y desactivar gestos
+        self._bloquear(True)
+        self._activar_modo_gestos(False)
+        
+        win = VentanaBienvenida(str(dest) if dest.is_file() else None)
+        self._safe_disconnect_all(win)
+        
+        # Conectar para que después de la bienvenida, inicie el flujo normal
+        def _iniciar_flujo_completo():
+            print("[FLUJO] Reiniciando ciclo completo...")
+            self._after_bienvenida()
+        
+        win.video_terminado.connect(_iniciar_flujo_completo)
+        self._swap(win)
+        
     def mostrar_bienvenida(self):
         """Reinicia la bienvenida con detección completa desde cero."""
-        if not self.logger.sesion_activa:
-            self.logger.registrar_inicio_sesion()
-            
-        dest = self.dir_videos / "bienvenida.mp4"
+        dest = self.dir_videos / "resp13.mp4"
 
         print("[SISTEMA] Mostrando pantalla de bienvenida...")
 
         # Forzar bloqueo (video reproducción) y desactivar gestos
         self._bloquear(True)
         self._activar_modo_gestos(False)
+        
+        # Limpiar referencia a ventana de interacción
+        self.ventana_interaccion = None
 
         # Crear ventana nueva SIEMPRE (no reutilizar)
         win = VentanaBienvenida(str(dest) if dest.is_file() else None)
@@ -902,8 +1254,6 @@ class GestorAplicacion(QObject):
         win.video_terminado.connect(self._after_bienvenida)
 
         self._swap(win)
-
-
 
     def _after_bienvenida(self):
         print("[FLUJO] Inicio -> Resp14 (Instrucciones de captura)...")
@@ -946,16 +1296,3 @@ class GestorAplicacion(QObject):
             print(f"[Telegram] Reporte #{self.notificacion_counter} enviado correctamente.")
         except Exception as e:
             print(f"[Telegram] Error al enviar reporte: {e}")
-            
-    def generar_reporte(self):
-        print("\n" + self.logger.obtener_reporte_completo())
-        archivo = self.logger.exportar_reporte_txt()
-        if archivo:
-            print(f"Reporte guardado en {archivo}")
-            
-    def imprimir_metricas_actuales(self):
-        """Imprime métricas actuales sin cerrar la app"""
-        print("\n" + "="*70)
-        print("MÉTRICAS ACTUALES (sesión en curso)")
-        print("="*70)
-        print(self.logger.obtener_reporte_completo())

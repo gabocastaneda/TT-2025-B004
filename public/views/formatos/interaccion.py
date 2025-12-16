@@ -3,6 +3,7 @@
 import re, cv2, hashlib, requests
 from pathlib import Path
 from typing import Optional, Callable
+import time
 
 from PyQt5.QtWidgets import QMainWindow, QFrame, QLabel, QGraphicsDropShadowEffect, QMessageBox
 from PyQt5.QtGui import QPixmap, QImage, QFont, QColor
@@ -284,6 +285,78 @@ class VentanaInteraccion(QMainWindow):
         if src_inicial:
             self.set_modo_reproduccion(True)
             self.cambiar_video_unidad(src_inicial, nombre_resp="resp1")
+            
+    def reactivar_camara_completa(self):
+        """Reactiva la cámara completamente después de haber estado oculta"""
+        print(f"[CAMARA] Reactivando cámara completa...")
+        
+        try:
+            # 1. Detener timer actual si está activo
+            if self.timer_cam.isActive():
+                self.timer_cam.stop()
+                print(f"[CAMARA] Timer anterior detenido")
+            
+            # 2. Intentar reabrir la cámara si está cerrada
+            if self.cap_cam is None or not self.cap_cam.isOpened():
+                print(f"[CAMARA] Reabriendo cámara...")
+                self.cap_cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+                if not self.cap_cam.isOpened():
+                    self.cap_cam = cv2.VideoCapture(0)
+            
+            # 3. Reiniciar timer
+            if not self.timer_cam.isActive():
+                self.timer_cam.start(30)
+                print(f"[CAMARA] Timer reiniciado")
+            
+            # 4. Reactivar inferencia de gestos
+            if self.inferencia:
+                try:
+                    # Si hay método para reactivar, usarlo
+                    if hasattr(self.inferencia, 'reactivar_deteccion'):
+                        self.inferencia.reactivar_deteccion()
+                    elif hasattr(self.inferencia, 'reanudar_deteccion'):
+                        self.inferencia.reanudar_deteccion()
+                    print(f"[CAMARA] Inferencia reactivada")
+                except Exception as e:
+                    print(f"[CAMARA] Error reactivando inferencia: {e}")
+                    
+            print(f"[CAMARA] Reactivación completa exitosa")
+            
+        except Exception as e:
+            print(f"[CAMARA] Error en reactivación completa: {e}")
+            # Intentar una solución de respaldo
+            try:
+                self._reinicializar_camara_emergencia()
+            except:
+                print(f"[CAMARA] Fallo incluso en reinicialización de emergencia")
+
+    def _reinicializar_camara_emergencia(self):
+        """Reinicialización de emergencia de la cámara"""
+        print(f"[CAMARA EMERGENCIA] Reinicializando cámara...")
+        
+        # Liberar recursos antiguos
+        try:
+            if self.cap_cam:
+                self.cap_cam.release()
+        except:
+            pass
+        
+        # Detener timers
+        try:
+            self.timer_cam.stop()
+        except:
+            pass
+        
+        # Crear nueva captura
+        time.sleep(0.5)  # Pequeña pausa
+        self.cap_cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        if not self.cap_cam.isOpened():
+            self.cap_cam = cv2.VideoCapture(0)
+        
+        # Reiniciar timer
+        self.timer_cam.start(30)
+        
+        print(f"[CAMARA EMERGENCIA] Cámara reinicializada")
 
     def _verificar_dependencias(self):
         print("\n" + "="*50)
@@ -512,15 +585,23 @@ class VentanaInteraccion(QMainWindow):
             y = self.recuadro_cam.height() - label_height - 15
             self.label_estado_gestos.setGeometry(x, y, label_width, label_height)
 
+    
     def _tick_cam(self):
-        if not self.cap_cam or not self.cap_cam.isOpened():
-            self.view_cam.setText("CÁMARA NO DISPONIBLE")
+        if not self.cap_cam:
+            self.view_cam.setText("CÁMARA NO INICIALIZADA")
             return
             
         try:
+            # Intentar leer frame
             ok, frame = self.cap_cam.read()
-            if not ok: return
+            
+            if not ok:
+                # Intento de recuperación
+                print(f"[CAMARA TICK] Error leyendo frame, intentando recuperar...")
+                self._intentar_recuperar_camara()
+                return
                 
+            # Procesar frame normalmente
             frame_procesado = frame
             estado_mensaje = "Cámara activa"
             color_estado = "#3498db"
@@ -580,9 +661,36 @@ class VentanaInteraccion(QMainWindow):
             else:
                 self.view_cam.setPixmap(QPixmap.fromImage(qimg))
                 
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[CAMARA TICK] Error general: {e}")
+            self.view_cam.setText("ERROR CÁMARA")
 
+    def _intentar_recuperar_camara(self):
+        """Intenta recuperar la cámara si falla"""
+        print(f"[RECUPERACION] Intentando recuperar cámara...")
+        
+        try:
+            # Liberar captura anterior
+            if self.cap_cam:
+                self.cap_cam.release()
+                time.sleep(0.3)
+            
+            # Intentar reabrir
+            self.cap_cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+            if not self.cap_cam.isOpened():
+                self.cap_cam = cv2.VideoCapture(0)
+            
+            if self.cap_cam.isOpened():
+                print(f"[RECUPERACION] Cámara recuperada exitosamente")
+                self.view_cam.setText("Cámara recuperada...")
+            else:
+                print(f"[RECUPERACION] No se pudo recuperar cámara")
+                self.view_cam.setText("CÁMARA NO DISPONIBLE")
+                
+        except Exception as e:
+            print(f"[RECUPERACION] Error recuperando cámara: {e}")
+            self.view_cam.setText("ERROR RECUPERACIÓN")
+    
     def cambiar_video_unidad(self, src: Optional[str], nombre_resp: Optional[str] = None):
         self._cerrar_overlay() 
 

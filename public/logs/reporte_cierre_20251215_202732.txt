@@ -1,0 +1,42 @@
+======================================================================
+REPORTE DE MÉTRICAS DEL SISTEMA
+======================================================================
+Última actualización: 2025-12-15T20:27:32.736164
+
+USO GENERAL
+  Total de usos: 18
+
+RAMAS SELECCIONADAS
+  Devolucion     :   19 (105.6%)
+  Facturacion    :    0 (  0.0%)
+  Aclaracion     :    0 (  0.0%)
+  Dudas          :    0 (  0.0%)
+  Otros          :    0 (  0.0%)
+
+RAZONES DE DEVOLUCIÓN
+  Danado         :    0 (  0.0%)
+  Defecto        :    0 (  0.0%)
+  Equivocacion   :    1 (100.0%)
+  Ninguno        :    0 (  0.0%)
+
+CALIFICACIONES
+  Promedio: 0.00 / 5.00
+  ★★★★★ (5):    0
+  ★★★★☆ (4):    0
+  ★★★☆☆ (3):    0
+  ★★☆☆☆ (2):    0
+  ★☆☆☆☆ (1):    0
+
+ERRORES DE CAPTURA POR SECCIÓN
+  Total de errores: 51
+  MAIN                :   24 ( 47.1%)
+  DEV_MENU            :   19 ( 37.3%)
+  DEV_REASON          :    4 (  7.8%)
+  WAIT_TICKET         :    4 (  7.8%)
+
+ESTADÍSTICAS ADICIONALES
+  Sin solución: 0
+  Alertas de usabilidad: 6
+  Timeouts por inactividad: 8
+
+======================================================================

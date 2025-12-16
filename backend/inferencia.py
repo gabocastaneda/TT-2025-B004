@@ -531,6 +531,33 @@ class InferenciaGestos:
         """Configura el callback para cuando se detecta un gesto"""
         self.callback_prediccion = callback
         print("✅ Callback de gestos configurado")
+        
+    def detener_deteccion(self):
+        """Pausa la detección de gestos"""
+        print(f"[INFERENCIA] Pausando detección de gestos")
+        # Si tienes algún timer o loop activo, detenlo aquí
+        self.deteccion_activa = False
+    
+    def reanudar_deteccion(self):
+        """Reanuda la detección de gestos"""
+        print(f"[INFERENCIA] Reanudando detección de gestos")
+        self.deteccion_activa = True
+        
+    def reactivar_deteccion(self):
+        """Reactiva completamente la detección"""
+        print(f"[INFERENCIA] Reactivando detección completa...")
+        
+        # Si hay medios para liberar recursos, hazlo aquí
+        if hasattr(self, 'hands'):
+            try:
+                self.hands.close()
+            except:
+                pass
+        
+        # Reinicializar MediaPipe
+        self.inicializar_deteccion()
+        
+        print(f"[INFERENCIA] Detección reactivada")
 
     def liberar(self):
         """Libera recursos"""

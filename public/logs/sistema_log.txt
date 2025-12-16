@@ -3,3 +3,90 @@
 [2025-12-10 20:00:02] APLICACIÓN CERRADA
 [2025-12-10 20:00:02] ======================================================================
 [2025-12-10 20:00:02] 
+[2025-12-14 20:43:10] INICIO DE SESIÓN #2
+[2025-12-14 20:44:23] RAMA SELECCIONADA: devolucion
+[2025-12-14 20:45:53] TIMEOUT POR INACTIVIDAD
+[2025-12-14 20:46:03] ======================================================================
+[2025-12-14 20:46:03] APLICACIÓN CERRADA
+[2025-12-14 20:46:03] ======================================================================
+[2025-12-14 20:46:03] 
+[2025-12-14 20:47:08] INICIO DE SESIÓN #3
+[2025-12-14 20:48:27] ALERTA USABILIDAD - Estado: MAIN, Intentos fallidos: 3
+[2025-12-14 20:48:33] ======================================================================
+[2025-12-14 20:48:33] APLICACIÓN CERRADA
+[2025-12-14 20:48:33] ======================================================================
+[2025-12-14 20:48:33] 
+[2025-12-14 20:48:43] INICIO DE SESIÓN #4
+[2025-12-14 20:49:55] RAMA SELECCIONADA: devolucion
+[2025-12-14 20:53:24] ======================================================================
+[2025-12-14 20:53:24] APLICACIÓN CERRADA
+[2025-12-14 20:53:24] ======================================================================
+[2025-12-14 20:53:24] 
+[2025-12-14 22:31:31] INICIO DE SESIÓN #5
+[2025-12-14 22:32:58] RAMA SELECCIONADA: devolucion
+[2025-12-14 22:33:35] ALERTA USABILIDAD - Estado: DEV_MENU, Intentos fallidos: 3
+[2025-12-14 22:35:11] TIMEOUT POR INACTIVIDAD
+[2025-12-14 22:36:32] RAMA SELECCIONADA: devolucion
+[2025-12-14 22:40:17] ======================================================================
+[2025-12-14 22:40:17] APLICACIÓN CERRADA
+[2025-12-14 22:40:17] ======================================================================
+[2025-12-14 22:40:17] 
+[2025-12-14 22:46:22] INICIO DE SESIÓN #6
+[2025-12-14 22:47:47] TIMEOUT POR INACTIVIDAD
+[2025-12-14 22:49:08] RAMA SELECCIONADA: devolucion
+[2025-12-14 22:52:49] ======================================================================
+[2025-12-14 22:52:49] APLICACIÓN CERRADA
+[2025-12-14 22:52:49] ======================================================================
+[2025-12-14 22:52:49] 
+[2025-12-14 23:01:27] INICIO DE SESIÓN #7
+[2025-12-14 23:02:59] RAMA SELECCIONADA: devolucion
+[2025-12-14 23:06:40] TIMEOUT POR INACTIVIDAD
+[2025-12-14 23:09:09] INICIO DE SESIÓN #8
+[2025-12-14 23:10:39] RAMA SELECCIONADA: devolucion
+[2025-12-15 08:14:43] INICIO DE SESIÓN #9
+[2025-12-15 08:16:15] ALERTA USABILIDAD - Estado: MAIN, Intentos fallidos: 3
+[2025-12-15 08:17:56] RAMA SELECCIONADA: devolucion
+[2025-12-15 08:19:40] ALERTA USABILIDAD - Estado: WAIT_TICKET, Intentos fallidos: 3
+[2025-12-15 08:20:13] ALERTA USABILIDAD - Estado: WAIT_TICKET, Intentos fallidos: 4
+[2025-12-15 08:20:26] INICIO DE SESIÓN #10
+[2025-12-15 08:21:57] RAMA SELECCIONADA: devolucion
+[2025-12-15 08:22:38] ALERTA USABILIDAD - Estado: DEV_MENU, Intentos fallidos: 3
+[2025-12-15 08:24:14] RAMA SELECCIONADA: devolucion
+[2025-12-15 08:33:40] INICIO DE SESIÓN #11
+[2025-12-15 08:35:07] RAMA SELECCIONADA: devolucion
+[2025-12-15 08:55:12] INICIO DE SESIÓN #12
+[2025-12-15 08:56:32] RAMA SELECCIONADA: devolucion
+[2025-12-15 09:09:31] INICIO DE SESIÓN #13
+[2025-12-15 09:10:58] TIMEOUT POR INACTIVIDAD
+[2025-12-15 09:17:06] INICIO DE SESIÓN #14
+[2025-12-15 09:18:34] RAMA SELECCIONADA: devolucion
+[2025-12-15 09:19:09] TIMEOUT POR INACTIVIDAD
+[2025-12-15 09:20:30] RAMA SELECCIONADA: devolucion
+[2025-12-15 09:22:06] TIMEOUT POR INACTIVIDAD
+[2025-12-15 09:23:40] RAMA SELECCIONADA: devolucion
+[2025-12-15 09:28:51] TIMEOUT POR INACTIVIDAD
+[2025-12-15 09:35:51] INICIO DE SESIÓN #15
+[2025-12-15 09:37:16] RAMA SELECCIONADA: devolucion
+[2025-12-15 09:43:00] RAMA SELECCIONADA: devolucion
+[2025-12-15 10:42:46] INICIO DE SESIÓN #16
+[2025-12-15 10:44:05] RAMA SELECCIONADA: devolucion
+[2025-12-15 20:16:55] INICIO DE SESIÓN #17
+[2025-12-15 20:17:12] ======================================================================
+[2025-12-15 20:17:12] APLICACIÓN CERRADA
+[2025-12-15 20:17:12] ======================================================================
+[2025-12-15 20:17:12] 
+[2025-12-15 20:21:07] INICIO DE SESIÓN #18
+[2025-12-15 20:22:31] RAMA SELECCIONADA: devolucion
+[2025-12-15 20:23:30] RAZÓN DEVOLUCIÓN: equivocacion
+[2025-12-15 20:27:32] ======================================================================
+[2025-12-15 20:27:32] APLICACIÓN CERRADA
+[2025-12-15 20:27:32] ======================================================================
+[2025-12-15 20:27:32] 
+[2025-12-15 20:35:30] INICIO DE SESIÓN #19
+[2025-12-15 20:35:48] ======================================================================
+[2025-12-15 20:35:48] APLICACIÓN CERRADA
+[2025-12-15 20:35:48] ======================================================================
+[2025-12-15 20:35:48] 
+[2025-12-15 20:36:48] INICIO DE SESIÓN #20
+[2025-12-15 20:38:11] RAMA SELECCIONADA: devolucion
+[2025-12-15 20:39:12] RAZÓN DEVOLUCIÓN: dañado
