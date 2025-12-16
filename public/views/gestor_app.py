@@ -441,11 +441,12 @@ class GestorAplicacion(QObject):
         self.notificacion_counter += 1
         paso_detenido = self._get_descripcion_estado_actual()
         resumen_texto = self._generar_texto_resumen_string()
-        msg_telegram = (f"🚨 APOYO EN CAPTURA DE SISTEMA 🚨\n📦 SEGUIMIENTO: #{self.notificacion_counter:04d}\n"
+        msg_telegram = (f"🚨 APOYO EN CAPTURA DE SISTEMA 🚨\n📦 SEGUIMIENTO: #DEV{self.notificacion_counter:04d}\n"
                         f"📍 DETENIDO EN: {paso_detenido}\n⚠️ El usuario ha fallado 3 veces consecutivas en este paso.\n"
                         f"--- RESUMEN HASTA EL MOMENTO ---\n{resumen_texto}"
                         f"!Alerta! Hay un problema con la captura del usuario, favor de acudir a apoyarlo. En caso de no poder brindar una correcta atención, comuniquese a 1-800-925-6278 (1-800-WALMART) para solicitar apoyo")
         self._enviar_telegram(msg_telegram)
+        self.notificacion_counter += 1
         
         if isinstance(self.ventana_actual, VentanaInteraccion):
             try: self.ventana_actual.gesto_detectado.disconnect()
@@ -854,7 +855,7 @@ class GestorAplicacion(QObject):
                 self._reset_error_count()
                 print(f"[DEBUG] Usuario dijo NO, yendo a encuesta")
                 # Ir a encuesta de satisfacción
-                self._enqueue_and_play(["resp4", "resp5", "resp16"], ST.SURVEY)
+                self._enqueue_and_play(["resp4", "resp5", "resp15"], ST.SURVEY)
             else:
                 print(f"[DEBUG] Entrada no válida en RESP3_MAIN: '{v}'")
                 self._handle_input_error()
@@ -870,7 +871,7 @@ class GestorAplicacion(QObject):
                 self._reset_error_count()
                 print(f"[DEBUG] Usuario dijo NO, yendo a encuesta")
                 # Ir a encuesta de satisfacción
-                self._enqueue_and_play(["resp4", "resp5", "resp16"], ST.SURVEY)
+                self._enqueue_and_play(["resp4", "resp5", "resp15"], ST.SURVEY)
             else:
                 print(f"[DEBUG] Entrada no válida en RESP3_NINGUNO: '{v}'")
                 self._handle_input_error()
@@ -881,7 +882,7 @@ class GestorAplicacion(QObject):
                 self._reset_error_count()
                 print(f"[DEBUG] Usuario dijo NO, yendo a encuesta")
                 # Ir directamente a encuesta
-                self._enqueue_and_play(["resp4", "resp5", "resp16"], ST.SURVEY)
+                self._enqueue_and_play(["resp4", "resp5", "resp15"], ST.SURVEY)
             else:
                 print(f"[DEBUG] Entrada no válida en RESP3_NO_TICKET: '{v}'")
                 self._handle_input_error()
