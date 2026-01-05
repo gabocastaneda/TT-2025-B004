@@ -30,6 +30,4 @@ from public.views.gestor_app import GestorAplicacion
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     gestor = GestorAplicacion(app)
-    while True:
-        gestor.run()
-        time.sleep(2)
+    gestor.run()
